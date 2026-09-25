@@ -1,0 +1,21 @@
+# Machine- and environment-specific MCP config
+/mcp.json
+/.mcp.json
+
+# OMP runtime and session state
+/sessions/
+/terminal-sessions/
+/blobs/
+/cache/
+/memories/
+/custom-session-files/
+/kimi-device-id
+/last-changelog-version
+*.db
+*.db-shm
+*.db-wal
+
+# Local secrets
+.env
+.env.*
+!.env.example

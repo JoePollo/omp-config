@@ -1,0 +1,56 @@
+modelRoles:
+  default: github-copilot/gpt-6-luna
+  smol: github-copilot/gpt-6-luna
+  plan: github-copilot/claude-opus-5.5:max
+  advisor: github-copilot/grok-4.7:medium
+  judge: github-copilot/gpt-6-sol:medium
+symbolPreset: nerd
+composer:
+  shape: box
+theme:
+  dark: dark-twilight
+setupVersion: 2
+hideThinkingBlock: true
+omitThinking: true
+externalThinking: false
+textVerbosity: low
+inlineToolDescriptors: "off"
+personality: pragmatic
+advisor:
+  enabled: true
+  immuneTurns: 0
+compaction:
+  enabled: true
+  experimentalContextManagement: true
+  methodOrder:
+    - handoff
+  thresholdPercent: 80
+memory:
+  backend: mnemopi
+autolearn:
+  enabled: true
+mnemopi:
+  scoping: per-project-tagged
+  proactiveLinking: true
+  enhancedRecall: true
+  polyphonicRecall: true
+readLineNumbers: true
+read:
+  renderMarkdown: true
+  toolResultPreview: true
+lsp:
+  formatOnWrite: true
+eval:
+  workpool:
+    freshAgents: true
+  autoBackground:
+    enabled: true
+task:
+  eager: preferred
+  enableLsp: true
+  isolation:
+    enabled: true
+worktree:
+  cleanSource: false
+dev:
+  autoqaConsent: denied
