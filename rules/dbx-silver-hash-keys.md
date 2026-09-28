@@ -3,8 +3,9 @@ description: "Data Vault hash keys: md5 hex STRING, never xxhash64"
 condition:
   - '(?i)\bxxhash64\s*\('
 scope: "tool:edit(*.sql), tool:write(*.sql), tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Vault hash keys and hashdiffs: `md5()` hex STRING from the repo's one hashing convention.
 
 ## Avoid
@@ -24,5 +25,6 @@ SELECT md5(<normalized_business_key>) AS <hash_key> FROM <staged>
 - No hashing convention in the repo → ask user (skill://databricks-silver-modeling/modeling.md).
 
 ## Exceptions
+
 - Non-key uses: sampling, bucketing, checksums outside the vault.
 - Legacy-origin models (skill://databricks-silver-modeling § Gate).

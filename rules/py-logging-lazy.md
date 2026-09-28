@@ -4,8 +4,9 @@ condition:
   - '\b(?:log|logger|logging|_log|_logger|LOG|LOGGER|_LOGGER)\.(?:debug|info|warning|warn|error|exception|critical|log)\(\s*(?:[rR]?[fF]|[fF][rR])["'']'
   - '\b(?:log|logger|logging|_log|_logger|LOG|LOGGER|_LOGGER)\.(?:debug|info|warning|warn|error|exception|critical|log)\(\s*(?:"[^"]*"|''[^'']*'')\s*(?:%|\.format\()'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 logging HOWTO / Google §3.10.1: constant %-template; values as arguments.
 
 ## Avoid

@@ -10,8 +10,9 @@ condition:
   - '(?m)^\s+class Config\s*:'
   - '\b(?:orm_mode|allow_population_by_field_name|allow_mutation|validate_all|smart_union)\s*='
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Pydantic v2 (floor `pydantic>=2.11,<3`): v1 names are deprecated or removed; `pydantic.v1` is legacy.
 
 | v1 | v2 |

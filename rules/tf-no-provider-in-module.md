@@ -3,8 +3,9 @@ description: "No provider blocks in child modules; declare required_providers an
 condition:
   - '(?m)^[ \t]*provider[ \t]+"[A-Za-z0-9_-]+"[ \t]*\{'
 scope: "tool:edit(**/modules/**/*.tf), tool:write(**/modules/**/*.tf)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 A child module with its own `provider` block can't be called with `for_each`, `count`, or `depends_on`, and its configuration must outlive every resource it manages.
 
 ## Avoid

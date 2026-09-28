@@ -7,8 +7,9 @@ condition:
   - '@provide_session\b'
   - '\bfrom\s+airflow\.models(?:\.\w+)?\s+import\s+[^\n]*\b(?:TaskInstance|DagRun|DagModel|XCom)\b'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Airflow 3 workers reach the API server through the Task Execution API; direct metadata-database access from tasks fails.
 
 | need | use |

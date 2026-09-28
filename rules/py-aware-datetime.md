@@ -6,8 +6,9 @@ condition:
   - '\bdatetime\.(?:now|today)\(\s*\)'
   - '\bdatetime\.fromtimestamp\(\s*[^,()]+\)'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Naive datetimes drop the zone; `utcnow()`/`utcfromtimestamp()` are deprecated since 3.12.
 
 | avoid | use |

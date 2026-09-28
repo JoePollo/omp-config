@@ -3,8 +3,9 @@ description: "New version constraints are exact pins; existing constraints keep 
 condition:
   - '(?m)^[ \t]*(?:required_version|version)[ \t]*=[ \t]*"[ \t]*(?:~>|>=|<=|!=|>|<)'
 scope: "tool:edit(*.tf), tool:write(*.tf)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 House policy for new constraints (new roots, new modules, newly added providers): exact pins everywhere.
 
 ## Avoid

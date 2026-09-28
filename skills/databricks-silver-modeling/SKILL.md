@@ -2,17 +2,26 @@
 name: databricks-silver-modeling
 description: "Data Vault 2.0 default for new Databricks silver models: modeling, domain ownership, Delta/Spark physical rules. Routed by rule://domain-router; never for legacy-origin models."
 hide: true
+kb:
+  files: ['**/data_platform/**/silver/**']
+  exclude: ['**/*legacy*/**', '**/*legacy*']
+  content:
+    - { files: '**/*.{py,sql}', pattern: '\bdwh_(?:dev|tst|prd)\.silver\b', flags: i }
 ---
+
 # Databricks silver modeling KB
+
 Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Read every topic whose trigger matches. Tags → skill://databricks-silver-modeling/sources.md.
 
 ## Gate
+
 - Apply: new silver models on Databricks (`dwh_<env>.silver`, env dev|tst|prd), Business Vault, PIT, bridge, gold marts reading them; includes new models whose data passed through a legacy system. [U]
 - Skip: legacy-origin models — existing models ported, rebuilt at parity, or maintained from the deprecated stack (on-prem SQL Server DW, SSIS, Informatica IICS, Informatica CDI-PC); `legacy*` pipelines, paths, schemas (e.g. bundle pipeline `legacy-bronze`). Skip → keep the model's existing design. [U, L]
 - Unclear origin → ask user before modeling.
 - Conflicts: repo config > AGENTS.md > this KB.
 
 ## Topics
+
 | trigger | read |
 |---|---|
 | hub, link, satellite, business key, hash key, hashdiff, load metadata, ghost record, Business Vault, PIT, bridge, gold mart design | skill://databricks-silver-modeling/modeling.md |
@@ -21,6 +30,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 | citing, verifying, source conflicts | skill://databricks-silver-modeling/sources.md |
 
 ## Core
+
 - New silver model → Data Vault 2.0 by default: Raw Vault (hub, link, satellite) + Business Vault where business rules apply. [DVA, BOOK, U]
 - Other pattern → plan states model, pattern, reason, tradeoff before building. [U]
 - Layers: bronze = staging input; silver = Raw Vault + Business Vault + PIT/bridge; gold = information marts. [SFD, SFT, DBW, SFF]

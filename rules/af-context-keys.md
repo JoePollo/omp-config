@@ -5,8 +5,9 @@ condition:
   - '\[\s*["''](?:execution_date|next_execution_date|prev_execution_date(?:_success)?|(?:next|prev|yesterday|tomorrow)_ds(?:_nodash)?)["'']\s*\]'
   - '\.get\(\s*["''](?:execution_date|next_execution_date|prev_execution_date(?:_success)?|(?:next|prev|yesterday|tomorrow)_ds(?:_nodash)?)["'']'
 scope: "tool:edit(**/dags/**/*.{py,sql,sh}), tool:write(**/dags/**/*.{py,sql,sh}), tool:edit(**/include/**/*.{py,sql,sh}), tool:write(**/include/**/*.{py,sql,sh}), tool:edit(**/plugins/**/*.py), tool:write(**/plugins/**/*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Airflow 3 removed these keys from the task context and templates.
 
 | removed | use |

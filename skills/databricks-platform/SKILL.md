@@ -2,11 +2,37 @@
 name: databricks-platform
 description: Databricks platform knowledge base (Lakeflow Connect, Lakeflow/Spark Declarative Pipelines, Delta tables, Unity Catalog, data quality, data_platform bundle). Routed by rule://domain-router.
 hide: true
+kb:
+  files: ['**/spark-pipeline.yml', '**/spark-pipeline.yaml']
+  roots: ['**/databricks.yml', '**/databricks.yaml']
+  content:
+    - { files: '**/*.{py,sql,scala}', pattern: '^(?:#|--|//) Databricks notebook source|\bpyspark\.pipelines\b|^\s*import\s+dlt\b|\bdbutils\.' }
+    - { files: '**/*.ipynb', pattern: 'application/vnd\.databricks' }
+    - { files: '**/*.sql', pattern: '\b(?:STREAMING\s+TABLE|MATERIALIZED\s+VIEW|AUTO\s+CDC|APPLY\s+CHANGES\s+INTO|CLUSTER\s+BY)\b', flags: i }
+  commands: ['^databricks\b']
+  mcp: ['mcp__databricks_sql_']
+  topics:
+    - file: data-platform-bundle.md
+      files: ['**/data_platform/**']
+    - file: lakeflow-connect.md
+      content: [{ files: '**/*.{py,yml,yaml,json}', pattern: '\bcloudFiles\b|\bingestion_definition\b|\bgateway_definition\b' }]
+    - file: pipelines.md
+      files: ['**/databricks.yml', '**/databricks.yaml', '**/spark-pipeline.yml', '**/spark-pipeline.yaml']
+      content: [{ files: '**/*.{py,sql}', pattern: '\bpyspark\.pipelines\b|^\s*import\s+dlt\b|STREAMING\s+TABLE|MATERIALIZED\s+VIEW|AUTO\s+CDC', flags: i }]
+    - file: delta-tables.md
+      content: [{ files: '**/*.{py,sql}', pattern: '\b(?:CLUSTER\s+BY|PARTITIONED\s+BY|ZORDER\s+BY|MERGE\s+INTO|DeltaTable)\b|^\s*(?:OPTIMIZE|VACUUM)\s' }]
+    - file: unity-catalog.md
+      content: [{ files: '**/*.{py,sql}', pattern: '\b(?:GRANT|REVOKE)\b[^;\n]*\bON\b|\bCREATE\s+(?:VOLUME|EXTERNAL\s+LOCATION)\b', flags: i }]
+    - file: data-quality.md
+      content: [{ files: '**/*.{py,sql}', pattern: '@(?:dp|dlt)\.expect|\bEXPECT\s*\(|\bCONSTRAINT\b[^\n]*\bEXPECT\b', flags: i }]
 ---
+
 # Databricks platform KB
+
 Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; a more specific domain KB (e.g. new-silver Data Vault modeling) wins for its own objects. Read every topic whose trigger matches. Tags → skill://databricks-platform/sources.md.
 
 ## Topics
+
 | trigger | read |
 |---|---|
 | anything under `Databricks/bundles/data_platform/`: config YAML (`raw`, `bronze`, `silver`, `legacy_bronze`, `egress`), `resources/`, pipelines, transforms, egress, tests; adding sources, tables, models, expectations | skill://databricks-platform/data-platform-bundle.md |
@@ -17,6 +43,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; a 
 | expectations, quarantine, validation gates, `CHECK`, `NOT NULL`, primary/foreign keys, anomaly detection, data profiling, quality metrics and alerts | skill://databricks-platform/data-quality.md |
 
 ## Core
+
 - Inside `~/src/Databricks/bundles/data_platform` (the house SDP framework) read skill://databricks-platform/data-platform-bundle.md first; its `CONTRIBUTING.md` contract and code patterns win over the generic topics. [DP:CONTRIBUTING.md]
 - Existing objects, legacy-migration sources, and maintenance-frozen bundles (`ils`, `build_job`, `dnb_datablocks`): keep their layout, config, and API style; fixes only; propose retrofits (managed conversion, clustering, `dlt` → `dp`), never apply them unasked. [U, DBX:README.md]
 - New tables: Unity Catalog managed, liquid clustering (`CLUSTER BY AUTO` by default), predictive optimization; no `ZORDER` or manual file-size settings; partition only a quarantine routing table, on `is_quarantined`. [D:delta/best-practices, D:tables/clustering, DP:src/data_platform/pipelines/silver/silver.py]
@@ -29,6 +56,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; a 
 - Databricks SQL files: the quality gate lints with sqlfluff and needs the repo's `.sqlfluff` to declare `dialect = databricks`. [U]
 
 ## Diagnose (read-only queries)
+
 | question | query |
 |---|---|
 | pipeline runs, failures, durations | `event_log('<pipeline-id>')` or data_platform's `<catalog>.audit.<pipeline>_event_log`; `system.lakeflow.pipelines`; `system.lakeflow_pipeline_events_preview.pipeline_events` (Beta) |
@@ -40,6 +68,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; a 
 [LDP:monitor-event-logs, LDP:monitor-and-query-events, LC:monitor-costs, D:tables/clustering, D:optimizations/predictive-optimization, DQ:anomaly-detection, DQ:data-profiling/monitor-output, D:tables/constraints, DP:resources/__init__.py, DP:src/data_platform/quarantine_monitor/view.py]
 
 ## Local platform (observed 2026-09-25; repo config wins)
+
 - One Unity Catalog metastore shared by the dev, tst, and prd workspaces; promotion runs dev → tst → prd. [U]
 - Catalogs `dwh_<env>`, `sandbox_<env>`, `finance_analytics_<env>`; layers are `dwh_<env>` schemas `raw`, `raw_epicor`, `bronze`, `silver`, `gold`, `audit` (+ dev `config`, `raw_dev`; tst/prd `tmp`). [U]
 - Catalogs are `ISOLATED` and workspace-bound; predictive optimization `ENABLE` on catalogs and schemas; `dwh_<env>` has catalog-level managed storage. [U]

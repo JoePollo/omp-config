@@ -2,11 +2,30 @@
 name: python
 description: Python domain knowledge base (PEPs, Google style, Astral/OpenAI tooling, Meta typing practice). Routed by rule://domain-router.
 hide: true
+kb:
+  files: ['**/*.py', '**/*.pyi', '**/*.ipynb', '**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/setup.py', '**/setup.cfg', '**/.python-version']
+  topics:
+    - file: typing.md
+      files: ['**/*.pyi', '**/py.typed']
+      content: [{ files: '**/*.py', pattern: '^\s*from\s+typing(?:_extensions)?\s+import\s[^\n]*\b(?:Protocol|TypedDict|TypeVar|ParamSpec|overload|Generic)\b' }]
+    - file: pydantic.md
+      content: [{ files: '**/*.py', pattern: '^\s*(?:from|import)\s+pydantic(?:_settings)?\b' }]
+    - file: packaging.md
+      files: ['**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/.python-version']
+    - file: testing.md
+      files: ['**/test_*.py', '**/*_test.py', '**/conftest.py', '**/tests/**/*.py']
+    - file: concurrency.md
+      content: [{ files: '**/*.py', pattern: '^\s*(?:import|from)\s+(?:asyncio|threading|multiprocessing|concurrent\.futures)\b|^\s*async\s+def\b' }]
+    - file: security.md
+      content: [{ files: '**/*.py', pattern: '^\s*(?:import|from)\s+(?:subprocess|requests|httpx|urllib|pickle|yaml|tarfile|zipfile|xml|tempfile|sqlalchemy|pyodbc|pymssql|psycopg)\b' }]
 ---
+
 # Python KB
+
 Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Read every topic whose trigger matches. Tags → skill://python/sources.md.
 
 ## Topics
+
 | trigger | read |
 |---|---|
 | annotations, generics, Protocol, TypedDict, overloads, `*.pyi`, `py.typed`, ty errors | skill://python/typing.md |
@@ -17,6 +36,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 | subprocess, SQL, HTTP clients, secrets/auth, deserialization, archives, XML, temp files, LLM/MCP I/O | skill://python/security.md |
 
 ## Target
+
 - Floor = `requires-python` lower bound → else `.python-version` → else deploy runtime; never use syntax/stdlib above it. [PyPA, uv]
 - 3.10: `match`, `X | Y`, `zip(strict=True)`, `ParamSpec`, `@dataclass(slots=True)`
 - 3.11: `Self`, `except*`, `add_note`, `TaskGroup`, `asyncio.timeout`, `tomllib`, `StrEnum`, `datetime.UTC`, `assert_never`
@@ -28,6 +48,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Keep `requires-python`, `.python-version`, ruff `target-version`, ty `python-version`, CI matrix aligned. [OAI]
 
 ## Workflow
+
 - Run via `uv run …`; checks in order: `uvx ruff format .`, `uvx ruff check .`, `uvx ty check`, `uv run pytest`. [uv, U]
 - Type-check after each edit batch, not only at the end; fix errors in code you touched, not unrelated legacy. [META]
 - Formatter owns layout (line length, quotes, wrapping, import order); never hand-format or reformat untouched code. [ruff, P8]
@@ -36,6 +57,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Internal APIs: migrate every caller in one cutover; published library APIs: `@warnings.deprecated` first, remove later. [U, P387, P702]
 
 ## Names & structure
+
 - `lower_with_under` modules/functions/variables; `CapWords` classes and type aliases; `UPPER_CASE` constants; `_name` internal; no `__mangled`. [P8, G3.16]
 - Descriptive names; no type-redundant (`user_dict`) or ambiguous abbreviations. [G3.16]
 - One job per function; split past ~40 lines. [G3.18]
@@ -45,6 +67,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - No power features: metaclasses, import hooks, `__getattr__` tricks, reflection hacks. [G2.19]
 
 ## Imports
+
 - Absolute imports; `from pkg.mod import Name` allowed; never `import *`. [P8, G2.3]
 - Import submodules explicitly (`import a.b`); never modify `sys.path`. [META]
 - No import-time side effects (registration, monkey-patching, I/O); expose `init()`/`main()`. [P810, META, OAI]
@@ -53,6 +76,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - 3.15+: `lazy import x` / `lazy from x import y` at module level for startup-heavy code (CLIs); libraries never enable global lazy mode. [P810, META]
 
 ## Functions & classes
+
 - Option-like params keyword-only (`*`); positional-only (`/`) when names aren't contract. [P3102, P570]
 - New optional params go last; call sites pass options by keyword. [OAI]
 - No mutable/computed defaults: functions take `None` then build; model fields use `Field(default_factory=…)`. [G2.12, PYD]
@@ -66,6 +90,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Rich comparisons: all six or `functools.total_ordering`. [P8]
 
 ## Data contracts
+
 - Record-shaped data (fixed fields, per-field types) is a Pydantic v2 `BaseModel`: parameters, returns, attributes, configs, payloads, results, private helpers included; never `dict`, `TypedDict`, `NamedTuple`, or dataclass records. [U, PYD]
 - `dict` only for homogeneous dynamic-key maps (`dict[str, int]`, `dict[OrderId, Order]`); never `dict[str, Any]`, `dict[str, object]`, nested dicts, `list[dict]`, or bare `dict` annotations. [U]
 - Raw payloads before validation (library returns, parsing-test inputs): `pydantic.JsonValue`, never `Any`. [PYD]
@@ -78,6 +103,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Conventions, rules, parsing, boundaries: skill://python/pydantic.md.
 
 ## Idioms
+
 - `is None` / `is not None`; never `== None` or `not x is None`. [P8]
 - Truthiness for empty containers; explicit `is None` when `None` differs from empty/0. [P8, G2.14, META]
 - Never compare bools with `==`/`is`. [P8]
@@ -97,6 +123,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Stream large data (iterators, `fetchmany`, chunked reads); no arbitrary size caps. [OAI, P249]
 
 ## Errors
+
 - Catch specific exceptions; no bare `except:`; `except Exception` only at boundaries that log the traceback or re-raise; errors never pass silently. [P8, P20, G2.4]
 - Minimal `try` body; success path in `else:`. [P8]
 - Translate with `raise AppError(...) from err`; `from None` only to hide irrelevant context, copying needed details into the message. [P3134, P415, P8]
@@ -112,6 +139,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Failure after acquiring resources: release them, keep the primary exception. [OAI]
 
 ## Logging
+
 - Libraries: `logger = logging.getLogger(__name__)`; no handlers (optional `NullHandler`); never configure root. [LOGH]
 - Applications: configure once at the entry point (`logging.config.dictConfig`). [LOGH]
 - Lazy args: `logger.info("Loaded %d rows from %s", n, table)`; no f-strings, `%`, or `.format` in the call. [LOGH, G3.10.1, OAI]
@@ -121,11 +149,13 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Re
 - Never log secrets, tokens, connection strings, auth headers, or customer data. [OAI]
 
 ## Time & text
+
 - Aware datetimes only: `datetime.now(UTC)`, `datetime.fromtimestamp(ts, tz=UTC)`; never `utcnow()` or naive `now()`. [SD:datetime, OAI]
 - Civil time: `ZoneInfo("America/Chicago")`; store and compare in UTC. [SD:zoneinfo, P615]
 - Text I/O: `encoding="utf-8"` on `open`/`read_text`/`write_text` (locale default until 3.15). [P597, P686]
 
 ## Docstrings [U, G3.8, P257]
+
 - Every module, class, function, and method, private included: triple-double-quoted docstring.
 - Module: one line stating its responsibility.
 - Function summary: one sentence, descriptive verb, period (`"""Loads the connections config; returns ConnectionsConfig."""`); then a behavior paragraph when non-obvious.

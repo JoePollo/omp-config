@@ -6,8 +6,9 @@ condition:
   - '(?i)\bMERGE\s+INTO\s+\S*\bsilver`?\.[^;]*?\bTHEN\s+(?:UPDATE|DELETE)\b'
   - 'silver[\s\S]*?\.when(?:Matched(?:Update|UpdateAll|Delete)|NotMatchedBySource(?:Update|Delete))\s*\('
 scope: "tool:edit(*.sql), tool:write(*.sql), tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Raw Vault hub, link, satellite: insert-only; history = new satellite rows, never updates or deletes.
 
 ## Avoid
@@ -29,6 +30,7 @@ WHEN NOT MATCHED THEN INSERT *;
 - One writer per hub/link per run: PK unenforced; concurrent insert-only MERGEs can duplicate keys.
 
 ## Exceptions
+
 - Legal erasure of personal data.
 - Business Vault, PIT, bridge rebuild/refresh; non-vault silver tables.
 - Legacy-origin models (skill://databricks-silver-modeling § Gate).

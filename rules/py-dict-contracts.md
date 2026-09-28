@@ -10,8 +10,9 @@ condition:
   - '\bTypedDict\(\s*["'']'
   - '\b(?:NamedTuple\b|namedtuple\()'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Record-shaped data (fixed fields, per-field types) is a Pydantic `BaseModel` (skill://python §Data contracts).
 
 ## Avoid

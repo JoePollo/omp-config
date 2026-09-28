@@ -7,8 +7,9 @@ condition:
   - '(?i)(?:^|\W)(?:r?f|fr)(?:"\s*(?:select\s[^"]*\sfrom|insert\s+into|update\s+\S+\s+set|delete\s+from|merge\s+into)\s|''\s*(?:select\s[^'']*\sfrom|insert\s+into|update\s+\S+\s+set|delete\s+from|merge\s+into)\s)'
   - '(?i)(?:^|\W)(?:r?f|fr)(?:"""|'''''')\s*(?:select\s[\s\S]*?\sfrom|insert\s+into|update\s+\S+\s+set|delete\s+from|merge\s+into|with\s+\w+\s+as\s*\()\s'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 PEP 249: values travel as parameters; SQL text stays constant.
 
 ## Avoid

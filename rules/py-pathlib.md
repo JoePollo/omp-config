@@ -5,8 +5,9 @@ condition:
   - '\bos\.(?:makedirs|listdir|remove|unlink|rename|rmdir|getcwd|mkdir)\('
   - '\bglob\.glob\('
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 | os / glob | pathlib |
 |---|---|
 | `os.path.join(a, b)` | `Path(a) / b` |

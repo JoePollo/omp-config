@@ -1,20 +1,22 @@
 # Databricks platform KB sources
+
 Verified 2026-09-25 against Microsoft Learn (Azure) and docs.databricks.com (AWS) mirrors of the same articles, and the user's repositories. Re-verify on DBR upgrades, product renames, or data_platform contract changes.
 
 | tag | source |
 |---|---|
-| `D:<path>` | https://learn.microsoft.com/en-us/azure/databricks/<path> (AWS mirror: https://docs.databricks.com/aws/en/<path>) |
+| `D:<path>` | <https://learn.microsoft.com/en-us/azure/databricks/><path> (AWS mirror: <https://docs.databricks.com/aws/en/><path>) |
 | `LDP:<p>` | `D:ldp/<p>` (Lakeflow Declarative Pipelines) |
 | `LC` · `LC:<p>` | `D:ingestion/lakeflow-connect/` · `D:ingestion/lakeflow-connect/<p>` |
 | `UC:<p>` | `D:data-governance/unity-catalog/<p>` |
 | `DQ` · `DQ:<p>` | `D:data-governance/unity-catalog/data-quality-monitoring/` · `D:data-governance/unity-catalog/data-quality-monitoring/<p>` |
 | `AL` | `D:ingestion/cloud-object-storage/auto-loader/production` |
-| `SDP` | https://spark.apache.org/docs/latest/declarative-pipelines-programming-guide.html (Apache Spark Declarative Pipelines, Spark 4.2) |
+| `SDP` | <https://spark.apache.org/docs/latest/declarative-pipelines-programming-guide.html> (Apache Spark Declarative Pipelines, Spark 4.2) |
 | `DP:<path>` | ~/src/Databricks/bundles/data_platform/<path> (house metadata/config-driven SDP bundle) |
 | `DBX:<path>` | ~/src/Databricks/<path> (bundles repository root) |
-| `U` | user environment, observed 2026-09-25: ~/.omp/agent/AGENTS.md; ~/.omp/agent/agents/quality-gate.md; ~/src/Databricks-IaC (`main.tf`, `modules/workspace/*`, `tfvars/*.tfvars`, `.github/index.md`, `DATABRICKS_TERRAFORM_PLAN.md`); ~/src/data-admin-rbac/metastore/README.md |
+| `U` | user environment, observed 2026-09-25: ~/.omp/agent/AGENTS.md; ~/.omp/agent/extensions/lib/gate-runner.ts; ~/src/Databricks-IaC (`main.tf`, `modules/workspace/*`, `tfvars/*.tfvars`, `.github/index.md`, `DATABRICKS_TERRAFORM_PLAN.md`); ~/src/data-admin-rbac/metastore/README.md |
 
 ## Snapshot
+
 - Names: Lakeflow pipelines / Lakeflow Declarative Pipelines (formerly DLT; open-source core = Spark Declarative Pipelines); Declarative Automation Bundles (formerly Databricks Asset Bundles); `AUTO CDC` (formerly `APPLY CHANGES`); data profiling (formerly Lakehouse Monitoring) with SDK `w.data_quality` (formerly `quality_monitors`).
 - Release states: `pipeline_events` system table Beta; anomaly detection Public Preview (percent-null, completeness slicing, UI alerts Beta); `VACUUM ... LITE` Public Preview; `UNIQUE` constraints Public Preview; configurable dropped-table recovery Public Preview; integrated CDC continuous mode Beta; query-based hard-delete tracking Beta.
 - Version gates: liquid clustering GA DBR 15.4 LTS+ (Delta); `CLUSTER BY AUTO` UC managed + DBR 15.4 LTS+; `OPTIMIZE ... FULL` DBR 16.4+; `OPTIMIZE ... FULL WHERE` and `REPLACE PARTITIONED BY WITH CLUSTER BY` DBR 18.1+; `SET MANAGED` DBR 17.3 LTS+ or serverless; PK/FK GA DBR 15.2+; `UNIQUE` DBR 18.2+; `DROP FEATURE` for checks DBR 15.4 LTS+; ABAC serverless or DBR 16.4+; row filters/masks DBR 12.2 LTS+; `cloudFiles.cleanSource` DBR 16.4 LTS+; bundle Python resources Databricks CLI 0.275.0+ (`databricks-bundles>=0.275.0` in data_platform).
@@ -22,6 +24,7 @@ Verified 2026-09-25 against Microsoft Learn (Azure) and docs.databricks.com (AWS
 - Predictive optimization: default for accounts created on or after 2024-11-11; existing accounts rolled out through 2026-08.
 
 ## Conflicts resolved
+
 - Inside data_platform, `CONTRIBUTING.md` and existing code patterns win over the generic topics (Databricks KB Core rule 1).
 - Partitioning: docs' quarantine example and data_platform silver `_snapshot_all` partition a routing table by `is_quarantined` (LDP:expectation-patterns, DP:src/data_platform/pipelines/silver/silver.py) while new tables use liquid clustering (D:tables/clustering) → that routing partition is the one sanctioned exception.
 - `MERGE`: pipelines use `AUTO CDC` (LDP:best-practices); egress `merge` tables `MERGE` into SQL Server by design (DP:src/data_platform/egress/apply.py); outside pipelines follow the MERGE performance guidance (D:delta/best-practices).

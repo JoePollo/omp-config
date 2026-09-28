@@ -4,8 +4,9 @@ condition:
   - '(?m)^\s*#'
   - '\bdb_schema\s*:'
 scope: "tool:edit(**/data_platform/config/**/*.yaml), tool:write(**/data_platform/config/**/*.yaml)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 data_platform config YAML is the metadata contract: strict Pydantic loaders reject unknown keys, and the files stay comment-free.
 
 ## Avoid

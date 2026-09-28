@@ -5,8 +5,9 @@ condition:
   - '(?i)\bZORDER\s+BY\b'
   - '\.write(?:Stream)?\b[\s\S]{0,300}?\.partitionBy\s*\('
 scope: "tool:edit(*.sql), tool:write(*.sql), tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 New tables: `CLUSTER BY` (liquid clustering); never `PARTITIONED BY` or `ZORDER`.
 
 ## Avoid
@@ -26,5 +27,6 @@ CREATE TABLE dwh_dev.silver.<satellite> (...) CLUSTER BY (<parent_hash_key>);
 - Predictive optimization runs `OPTIMIZE`; without it schedule `OPTIMIZE` every 1–2 h on busy tables.
 
 ## Exceptions
+
 - Converting an existing partitioned table on request: `ALTER TABLE ... REPLACE PARTITIONED BY WITH CLUSTER BY` (DBR 18.1+).
 - Legacy-origin models (skill://databricks-silver-modeling § Gate).

@@ -7,8 +7,9 @@ condition:
   - '(?m)^(?!class\s|def\s|async\s)[A-Za-z_][^#\n]*\b\w+Hook\s*\('
   - '(?m)^[A-Za-z_][^#\n]*\b(?:requests|httpx|urllib\.request)\.\w+\s*\('
 scope: "tool:edit(**/dags/**/*.py), tool:write(**/dags/**/*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Module-level code in DAG files runs on every parse (at least every 30 s): it slows the dag processor and hits external systems.
 
 ## Avoid

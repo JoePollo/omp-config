@@ -5,8 +5,9 @@ condition:
   - '\bPARTITIONED\s+BY\b'
   - '\.write(?:Stream)?\b[\s\S]{0,300}?\.partitionBy\('
 scope: "tool:edit(*.{sql,py,ipynb}), tool:write(*.{sql,py,ipynb})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 New tables, streaming tables, and materialized views: liquid clustering; never `ZORDER`; partition only a quarantine routing table on `is_quarantined`.
 
 ## Avoid

@@ -4,8 +4,9 @@ condition:
   - '(?m)(?:^|[^\w.])open\((?![^\n]*\bencoding\s*=)(?![^\n]*["''][rwxat+]*b[rwxat+]*["''])'
   - '\.(?:read_text|write_text)\((?![^\n]*\bencoding\s*=)'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Before 3.15 the default text encoding is the locale's (e.g. cp1252 on Windows).
 
 | avoid | use |

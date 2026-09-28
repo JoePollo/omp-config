@@ -4,8 +4,9 @@ condition:
   - '\bshell\s*=\s*True\b'
   - '\bos\.(?:system|popen)\('
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 subprocess security: pass arguments as a sequence; data never reaches a shell.
 
 ## Avoid

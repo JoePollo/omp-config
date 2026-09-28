@@ -3,8 +3,9 @@ description: "No literal credentials in Terraform code or tfvars"
 condition:
   - '(?i)\b(?:\w+_)?(?:secret|password|passwd|access_key|account_key|private_key|api_key|integration_key|sas_token|token|connection_string)[ \t]*=[ \t]*"[^"$%\s][^"]*"'
 scope: "tool:edit(*.{tf,tfvars}), tool:write(*.{tf,tfvars})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Credentials never live in `.tf` or `.tfvars`: state, plans, and git history keep them in plaintext.
 
 ## Avoid

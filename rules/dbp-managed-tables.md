@@ -4,8 +4,9 @@ condition:
   - '(?i)\bCREATE\b[^;]{0,2000}?\bTABLE\b[^;]{0,2000}?\bLOCATION\s+[''"]'
   - '\.option\(\s*[''"]path[''"]'
 scope: "tool:edit(*.{sql,py,ipynb}), tool:write(*.{sql,py,ipynb})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 New tables: Unity Catalog managed (Databricks manages files, layout, and maintenance); external tables only for the documented exceptions.
 
 ## Avoid

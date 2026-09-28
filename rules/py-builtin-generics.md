@@ -5,8 +5,9 @@ condition:
   - '\bfrom typing import \([^)]*\b(?:List|Dict|Set|FrozenSet|Tuple|Type|Deque|DefaultDict|OrderedDict|Counter|ChainMap|Callable|Iterable|Iterator|Generator|Sequence|MutableSequence|Mapping|MutableMapping|AbstractSet|MutableSet|Collection|Container|Awaitable|Coroutine|AsyncIterable|AsyncIterator|AsyncGenerator|ContextManager|AsyncContextManager|Pattern|Match|Text)\b'
   - '\btyping\.(?:List|Dict|Set|FrozenSet|Tuple|Type|Deque|DefaultDict|OrderedDict|Counter|ChainMap|Callable|Iterable|Iterator|Generator|Sequence|MutableSequence|Mapping|MutableMapping|AbstractSet|MutableSet|Collection|Container|Awaitable|Coroutine|AsyncIterable|AsyncIterator|AsyncGenerator|ContextManager|AsyncContextManager|Pattern|Match|Text)\b'
 scope: "tool:edit(*.py), tool:write(*.py), tool:edit(*.pyi), tool:write(*.pyi)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 PEP 585 (3.9+): generics come from builtins and stdlib modules, not `typing`.
 
 | typing | use |

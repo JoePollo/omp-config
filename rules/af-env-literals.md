@@ -4,8 +4,9 @@ condition:
   - '(?i)\b(?:dwh|sandbox|finance_analytics)_(?:dev|tst|prd)\b'
   - '(?i)azure_(?:dev|tst|prd)_managed_identity'
 scope: "tool:edit(**/dags/**/*.{py,sql}), tool:write(**/dags/**/*.{py,sql}), tool:edit(**/include/**/*.{py,sql}), tool:write(**/include/**/*.{py,sql})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 One codebase deploys to dev, tst, and prd; environment names come from the Deployment.
 
 | avoid | use |

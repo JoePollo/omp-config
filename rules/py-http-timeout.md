@@ -4,8 +4,9 @@ condition:
   - '\brequests\.(?:get|post|put|patch|delete|head|options|request)\((?![^\n]*\btimeout\s*=)'
   - '\burlopen\((?![^\n]*\btimeout\s*=)'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 `requests` and `urlopen` wait forever without `timeout`.
 
 ## Use

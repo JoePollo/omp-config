@@ -3,8 +3,9 @@ description: "Scope ignore_changes to named attributes another owner manages, ne
 condition:
   - '\bignore_changes[ \t]*=[ \t]*all\b'
 scope: "tool:edit(*.tf), tool:write(*.tf)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 `ignore_changes = all` hides every future drift and configuration change on the resource.
 
 ## Avoid

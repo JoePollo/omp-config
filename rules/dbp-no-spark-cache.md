@@ -5,8 +5,9 @@ condition:
   - '\.persist\('
   - '\bCACHE\s+(?:LAZY\s+)?TABLE\b'
 scope: "tool:edit(*.{sql,py,ipynb}), tool:write(*.{sql,py,ipynb})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Spark caching on Delta loses data skipping for filters applied later and can serve stale data when the table is read through another identifier.
 
 ## Avoid

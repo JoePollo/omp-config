@@ -3,8 +3,9 @@ description: "DAG and task dates are fixed; now()/today() in constructor argumen
 condition:
   - '\b(?:start_date|end_date)\s*=\s*(?:\w+\.)*(?:now|today|utcnow)\s*\('
 scope: "tool:edit(**/dags/**/*.py), tool:write(**/dags/**/*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 A runtime-varying `start_date`/`end_date` changes the serialized DAG on every parse: endless DAG versions, unbounded metadata growth, broken scheduling.
 
 | avoid | use |

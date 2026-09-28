@@ -1,9 +1,12 @@
-import { createHash } from "node:crypto";
-import { stat } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { areaFor, buildIndex, resolveRepo, serializeIndex, type ProjectIndex, type RepoRef } from "./lib/project-index.ts";
+import { runGate, type GateReport } from "./lib/gate-runner.ts";
+import { loadKbSkills } from "./lib/skills.ts";
+import { findPlanMarker, latestMode, type BranchEntry, type Exec } from "./lib/session.ts";
 
-const GATE_AGENT = "quality-gate";
 const MAX_GATE_RUNS = 3;
 const MAX_UNANSWERED_REQUESTS = 2;
 const GATE_RUN_ENTRY = "jpollock.quality-gate.run";
@@ -12,38 +15,22 @@ const MUTATING_TOOLS = ["edit", "write", "ast_edit", "apply_patch", "bash", "eva
 const REVIEW_RUN_ENTRY = "jpollock.quality-gate.review-run";
 const VERDICT_ENTRY = "jpollock.quality-gate.verdict";
 const REVIEW_AGENTS: readonly ReviewAgent[] = ["entropy-review", "code-review"];
-const CYCLE_AGENTS: readonly string[] = [GATE_AGENT, ...REVIEW_AGENTS];
+const CYCLE_AGENTS = REVIEW_AGENTS;
 const MAX_REVIEW_RUNS = 5;
 
-type BranchEntry = {
-  type: string;
-  id: string;
-  timestamp: string;
-  message?: {
-    role?: string;
-    synthetic?: boolean;
-    content?: unknown;
-  };
-  customType?: string;
-  data?: Record<string, unknown>;
-  mode?: string;
-};
+const REVIEW_IGNORED_DIRECTORIES = new Set(["__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "node_modules"]);
+const REVIEW_IGNORED_FILES = new Set(["uv.lock", "package-lock.json", "poetry.lock"]);
 
-type PlanMarker = {
-  id: string;
-  timestamp: string;
-  index: number;
-};
+type FinalOutcome = "pass" | "skipped" | "findings" | "blocked" | "cap-reached" | "reviews-passed" | "reviews-dismissed" | "review-cap-reached" | "review-blocked" | "review-not-run" | "verdict-missing" | "review-error";
 
-type FinalOutcome = "pass" | "skipped" | "findings" | "blocked" | "cap-reached" | "gate-not-run" | "gate-error" | "reviews-passed" | "reviews-dismissed" | "review-cap-reached" | "review-blocked" | "review-not-run" | "verdict-missing" | "review-error";
-
-type GateStatus = "pass" | "findings" | "blocked" | "skipped" | "error";
+type GateStatus = "pass" | "findings" | "blocked" | "skipped";
 
 type GateRunData = {
   markerId: string;
-  toolCallId: string;
+  id: string;
   status: GateStatus;
   fingerprint: string | null;
+  report: GateReport;
 };
 type ReviewAgent = "entropy-review" | "code-review";
 
@@ -71,7 +58,7 @@ type VerdictData = {
 
 type Decision = { id: string; verdict: "agree" | "disagree"; reason: string };
 
-type ReviewItem = { agent: ReviewAgent; run: number; dismissed: string };
+type ReviewItem = { agent: ReviewAgent; run: number; dismissed: string; kb: string };
 
 type CycleState = {
   gateRuns: GateRunData[];
@@ -93,14 +80,14 @@ type GateContext = {
   };
 };
 
+
+
 const FINAL_NOTICES: Record<FinalOutcome, { message: string; level: "info" | "warning" | "error" }> = {
   pass: { message: "Quality gate passed; no unstaged changes to review", level: "info" },
   skipped: { message: "Quality gate skipped; no unstaged changes to review", level: "info" },
   findings: { message: "Quality gate finished with findings; no unstaged changes to review", level: "warning" },
   blocked: { message: "Quality gate blockers reported to the user", level: "warning" },
   "cap-reached": { message: "Quality gate run cap reached", level: "warning" },
-  "gate-not-run": { message: "Quality gate was requested but never ran", level: "warning" },
-  "gate-error": { message: "Quality gate produced no readable report", level: "error" },
   "reviews-passed": { message: "Reviews passed", level: "info" },
   "reviews-dismissed": { message: "Reviews finished; remaining findings disagreed", level: "info" },
   "review-cap-reached": { message: "Review run cap reached; blockers reported to the user", level: "warning" },
@@ -109,43 +96,6 @@ const FINAL_NOTICES: Record<FinalOutcome, { message: string; level: "info" | "wa
   "verdict-missing": { message: "Review findings never received a verdict", level: "warning" },
   "review-error": { message: "A review agent produced no readable report", level: "error" },
 };
-
-function textOf(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-
-  let text = "";
-  for (const block of content) {
-    if (block && typeof block === "object" && "type" in block && block.type === "text" && "text" in block) {
-      const value = block.text;
-      if (typeof value === "string") text += value;
-    }
-  }
-  return text;
-}
-
-function findPlanMarker(branch: BranchEntry[]): PlanMarker | null {
-  for (let index = branch.length - 1; index >= 0; index--) {
-    const entry = branch[index];
-    if (entry.type === "reset_boundary") return null;
-
-    if (
-      entry.type === "message" &&
-      entry.message?.role === "developer" &&
-      entry.message.synthetic === true
-    ) {
-      const text = textOf(entry.message.content);
-      if (text.includes("Plan approved.") && text.includes('<plan path="')) {
-        return { id: entry.id, timestamp: entry.timestamp, index };
-      }
-    }
-
-    if (entry.type === "custom_message" && entry.customType === "plan-yolo-handoff") {
-      return { id: entry.id, timestamp: entry.timestamp, index };
-    }
-  }
-  return null;
-}
 
 function readCycle(after: BranchEntry[], markerId: string): CycleState {
   const cycle: CycleState = { gateRuns: [], phaseGateRuns: [], reviewRuns: [], verdicts: [], finalized: false };
@@ -186,20 +136,13 @@ function reviewReportOf(result: TaskResult): { status: ReviewStatus; findings: F
   return { status, findings };
 }
 
-function planModeActive(after: BranchEntry[]): boolean {
-  for (let index = after.length - 1; index >= 0; index--) {
-    const entry = after[index];
-    if (entry.type === "mode_change") return entry.mode === "plan";
-  }
-  return false;
-}
 
 function isCycleTask(args: unknown): boolean {
   if (!args || typeof args !== "object") return false;
   const value = args as { agent?: unknown; tasks?: unknown };
-  if (!Array.isArray(value.tasks)) return typeof value.agent === "string" && CYCLE_AGENTS.includes(value.agent);
+  if (!Array.isArray(value.tasks)) return typeof value.agent === "string" && CYCLE_AGENTS.includes(value.agent as ReviewAgent);
   return value.tasks.length > 0 && value.tasks.every((task) =>
-    task !== null && typeof task === "object" && "agent" in task && typeof task.agent === "string" && CYCLE_AGENTS.includes(task.agent),
+    task !== null && typeof task === "object" && "agent" in task && typeof task.agent === "string" && CYCLE_AGENTS.includes(task.agent as ReviewAgent),
   );
 }
 
@@ -263,19 +206,83 @@ async function fingerprint(pi: ExtensionAPI, cwd: string): Promise<string | null
   return hash.digest("hex");
 }
 
-function RUN_REQUEST(n: number, prefix: string, root: string, timestamp: string): string {
-  return `[quality-gate] ${prefix}Before finishing this approved plan, run the post-implementation quality gate (run ${n} of 3).\nCall the \`task\` tool once with context "Post-implementation quality gate for an approved plan." and a single item: agent "quality-gate", task "Run the quality gate. repo_root: ${root}. plan_started_at: ${timestamp}. gate_run: ${n}." The gate is blocking; wait for its report, then act on it:\n- pass or skipped: finish with a short summary that includes the gate's summary line.\n- blockers of kind "ci" (ruff, ty, pytest): CI blockers that can never be ignored. Fix them and run the gate again. If one cannot be fixed within this plan, end your turn with an explicit BLOCKED report to the user giving the failing command and error.\n- blockers of kind "config" (no SQLFluff dialect): either add a .sqlfluff (dialect = tsql or databricks) and run the gate again, or report the missing config to the user as a blocker.\n- findings (terraform, sqlfluff lint, biome, rumdl, yamllint, unavailable tools): your call; fix what matters or list them in your summary.\nNever silence tools with suppressions or config changes unless the plan calls for it.`;
+async function writeIndexIfChanged(repo: RepoRef, index: ProjectIndex): Promise<void> {
+  const serialized = serializeIndex(index);
+  let existing: string | null = null;
+  try {
+    existing = await readFile(repo.indexPath, "utf8");
+  } catch {
+    existing = null;
+  }
+  if (serialized === existing) return;
+  await mkdir(dirname(repo.indexPath), { recursive: true });
+  await writeFile(repo.indexPath, serialized);
 }
+
+async function changedReviewPaths(exec: Exec, root: string): Promise<Set<string>> {
+  const [diff, untracked] = await Promise.all([
+    exec("git", ["diff", "--name-only", "-z"], { cwd: root }),
+    exec("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd: root }),
+  ]);
+  return new Set([...diff.stdout.split("\0"), ...untracked.stdout.split("\0")].filter(Boolean).map((path) => path.replaceAll("\\", "/")));
+}
+
+function isIgnoredReviewPath(path: string): boolean {
+  const parts = path.toLowerCase().split("/");
+  const name = parts.at(-1)!;
+  return REVIEW_IGNORED_FILES.has(name) || name.endsWith(".lock") || parts.some((part) => REVIEW_IGNORED_DIRECTORIES.has(part));
+}
+
+async function isReviewFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function reviewDomains(index: ProjectIndex, root: string, paths: Set<string>): Promise<string[]> {
+  const domains = new Set<string>();
+  for (const path of paths) {
+    if (isIgnoredReviewPath(path) || !(await isReviewFile(join(root, path)))) continue;
+    for (const domain of areaFor(index, path)?.domains ?? []) domains.add(domain);
+  }
+  return [...domains].sort();
+}
+
+async function reviewKb(pi: ExtensionAPI, root: string): Promise<{ code: string[]; entropy: string[] }> {
+  const skills = loadKbSkills(join(import.meta.dir, "..", "skills")).skills;
+  const entropy = skills.filter((skill) => skill.gate === "commit-bound").map((skill) => skill.name).sort();
+  const exec: Exec = (command, args, options) => pi.exec(command, args, options);
+  const repo = await resolveRepo(exec, root);
+  if (!repo) return { code: skills.filter((skill) => skill.gate === "files").map((skill) => skill.name).sort(), entropy };
+  const index = await buildIndex(exec, repo, skills);
+  await writeIndexIfChanged(repo, index);
+  const paths = await changedReviewPaths(exec, repo.worktreeRoot);
+  return { code: await reviewDomains(index, repo.worktreeRoot, paths), entropy };
+}
+
+function GATE_REPORT_REASON(report: GateReport, n: number): string {
+  const sections: string[] = [];
+  const ci = report.blockers.filter((item) => item.kind === "ci");
+  const config = report.blockers.filter((item) => item.kind === "config");
+  if (ci.length > 0) sections.push(`CI blockers (never ignore; fix them, then end your turn so the gate re-runs):\n${ci.map((item) => `- ${item.step}: ${item.detail}`).join("\n")}`);
+  if (config.length > 0) sections.push(`Config blockers (fix the configuration each line names, or report it to the user):\n${config.map((item) => `- ${item.step}: ${item.detail}`).join("\n")}`);
+  if (report.findings.length > 0) sections.push(`Findings (your call; fix what matters or list them in your final summary):\n${report.findings.map((item) => `- ${item.step}: ${item.detail}`).join("\n")}`);
+  if (report.filesChangedByGate.length > 0) sections.push(`Reformatted by the gate: ${report.filesChangedByGate.join(", ")}.`);
+  return [`[quality-gate] Run ${n} of ${MAX_GATE_RUNS}: ${report.summary}.`, ...sections, "If a CI blocker cannot be fixed within this plan, end your turn with an explicit BLOCKED report giving the failing command and error. Never silence tools with suppressions or config changes unless the plan calls for it."].join("\n");
+}
+
 
 function BLOCKED_REASON(k: number): string {
   const base = "[quality-gate] The latest quality-gate run reported blockers and no files have changed since. CI blockers (ruff, ty, pytest) can never be ignored.";
   if (k < MAX_GATE_RUNS) {
-    return `${base} Fix them and run the gate again (run ${k + 1} of 3), or, if they cannot be fixed within this plan, end your turn with an explicit BLOCKED report to the user listing each blocker, its command, and its error.`;
+    return `${base} Fix them and end your turn; the gate re-runs automatically (run ${k + 1} of 3), or, if they cannot be fixed within this plan, end your turn with an explicit BLOCKED report to the user listing each blocker, its command, and its error.`;
   }
   return `${base} The gate run cap is reached; end your turn with an explicit BLOCKED report to the user listing each blocker, its command, and its error.`;
 }
 
-const CAP_REASON = "[quality-gate] Files changed after the final quality-gate run (3 of 3). Do not run the gate again. End your turn with a summary stating the gate did not re-run after the last changes, listing any unresolved blockers and findings from the last report.";
+const CAP_REASON = "[quality-gate] Files changed after the final quality-gate run (3 of 3). The gate will not re-run. End your turn with a summary stating the gate did not re-run after the last changes, listing any unresolved blockers and findings from the last report.";
 
 function runLabels(runs: ReviewRunData[]): string {
   const labels = runs.map((run) => `${run.agent} run ${run.run}`);
@@ -297,7 +304,7 @@ function dismissedFor(cycle: CycleState, agent: ReviewAgent): string {
 function REVIEW_REQUEST(items: ReviewItem[], root: string): string {
   const taskLines: string[] = [];
   for (const item of items) {
-    taskLines.push(`- agent "${item.agent}", task "Review the unstaged changes. repo_root: ${root}. review_run: ${item.run} of ${MAX_REVIEW_RUNS}. dismissed: ${item.dismissed}."`);
+    taskLines.push(`- agent "${item.agent}", task "Review the unstaged changes. repo_root: ${root}. review_run: ${item.run} of ${MAX_REVIEW_RUNS}. kb: ${item.kb}. dismissed: ${item.dismissed}."`);
   }
   const itemWord = items.length === 1 ? "this item" : "these items";
   return `[plan-review] The quality gate has settled. Before finishing this approved plan, review the unstaged changes.\nCall the \`task\` tool once with context "Post-implementation review of the unstaged changes for an approved plan." and ${itemWord}:\n${taskLines.join("\n")}\nThe review agents are blocking; wait for every report, then act on each:\n- pass or skipped: nothing to do.\n- fail: judge every finding on its merits against the plan and the code, then call \`review_verdict\` once for that report with its agent, its run number, and one decision { id, verdict: "agree" or "disagree", reason } per finding id. Record every verdict before editing files.\n- After the verdicts, implement every agreed finding unless the \`review_verdict\` reply says the review cap is reached, then end your turn: the quality gate re-runs, then only the agents whose findings you agreed with.\n- Suggestions are informational and need no verdict.\nIf you agreed with no finding in these reports, finish with a short summary that includes each report's summary line and every finding you disagreed with in this plan's reviews, with its reason.`;
@@ -318,6 +325,7 @@ function VERDICT_REPLY(agent: ReviewAgent, run: number, agreed: string[], disagr
   if (run >= MAX_REVIEW_RUNS) return `[plan-review] Recorded ${agent} run ${run} of ${MAX_REVIEW_RUNS}: agreed ${agreed.join(", ")}. The review cap is reached: do not implement them. End your turn with an explicit BLOCKED report to the user listing each agreed finding (agent, id, file:line, rule, fix).`;
   return `[plan-review] Recorded ${agent} run ${run}: agreed ${agreed.join(", ")}; disagreed ${disagreed}. Once every failing report has a verdict, implement the agreed findings and end your turn; the quality gate re-runs, then ${agent}.`;
 }
+
 
 export default function qualityGate(pi: ExtensionAPI): void {
   const requests = new Map<string, number>();
@@ -388,45 +396,31 @@ export default function qualityGate(pi: ExtensionAPI): void {
     if (details?.async?.state === "running" || !Array.isArray(details?.results)) return;
 
     const results = details.results as TaskResult[];
-    const gateResult = results.findLast((result) => result.agent === GATE_AGENT);
     const reviewResults = results.filter((result) => REVIEW_AGENTS.includes(result.agent as ReviewAgent));
-    if (!gateResult && reviewResults.length === 0) return;
+    if (reviewResults.length === 0) return;
 
     const branch = ctx.sessionManager.getBranch() as unknown as BranchEntry[];
     const marker = findPlanMarker(branch);
     if (!marker) return;
 
     const snapshot = await fingerprint(pi, ctx.cwd);
-    if (gateResult) {
-      const reportedStatus = gateResult.structuredOutput?.data?.status;
-      const status: GateStatus =
-        (reportedStatus === "pass" || reportedStatus === "findings" || reportedStatus === "blocked" || reportedStatus === "skipped") &&
-        gateResult.exitCode === 0 &&
-        !gateResult.aborted
-          ? reportedStatus
-          : "error";
-      pi.appendEntry(GATE_RUN_ENTRY, { markerId: marker.id, toolCallId: event.toolCallId, status, fingerprint: snapshot } satisfies GateRunData);
-    }
-
-    if (reviewResults.length > 0) {
-      const cycle = readCycle(branch.slice(marker.index + 1), marker.id);
-      const runCounts = new Map<ReviewAgent, number>();
-      for (const run of cycle.reviewRuns) runCounts.set(run.agent, run.run);
-      for (const result of reviewResults) {
-        const agent = result.agent as ReviewAgent;
-        const run = (runCounts.get(agent) ?? 0) + 1;
-        runCounts.set(agent, run);
-        const report = reviewReportOf(result);
-        pi.appendEntry(REVIEW_RUN_ENTRY, {
-          markerId: marker.id,
-          toolCallId: event.toolCallId,
-          agent,
-          run,
-          status: report.status,
-          findings: report.findings,
-          fingerprint: snapshot,
-        } satisfies ReviewRunData);
-      }
+    const cycle = readCycle(branch.slice(marker.index + 1), marker.id);
+    const runCounts = new Map<ReviewAgent, number>();
+    for (const run of cycle.reviewRuns) runCounts.set(run.agent, run.run);
+    for (const result of reviewResults) {
+      const agent = result.agent as ReviewAgent;
+      const run = (runCounts.get(agent) ?? 0) + 1;
+      runCounts.set(agent, run);
+      const report = reviewReportOf(result);
+      pi.appendEntry(REVIEW_RUN_ENTRY, {
+        markerId: marker.id,
+        toolCallId: event.toolCallId,
+        agent,
+        run,
+        status: report.status,
+        findings: report.findings,
+        fingerprint: snapshot,
+      } satisfies ReviewRunData);
     }
     return undefined;
   });
@@ -437,7 +431,7 @@ export default function qualityGate(pi: ExtensionAPI): void {
     if (event.signal.aborted || !marker) return;
 
     const after = branch.slice(marker.index + 1);
-    if (planModeActive(after)) return;
+    if (latestMode(after) === "plan") return;
     const cycle = readCycle(after, marker.id);
     if (cycle.finalized) return;
     if (cycle.gateRuns.length === 0 && cycle.reviewRuns.length === 0 && !didWorkSince(after)) return;
@@ -465,7 +459,7 @@ export default function qualityGate(pi: ExtensionAPI): void {
       return request(`${marker.id}:verdict:${cycle.reviewRuns.length}:${cycle.verdicts.length}`, "Review verdicts requested", VERDICT_REQUEST(pending), "verdict-missing");
     }
 
-    const current = await fingerprint(pi, ctx.cwd);
+    let current = await fingerprint(pi, ctx.cwd);
     const capped = latest.filter((run) => run.run >= MAX_REVIEW_RUNS && (verdictFor(run)?.agreed.length ?? 0) > 0);
     if (capped.length > 0) {
       finalize(marker.id, "review-cap-reached", cycle, ctx);
@@ -474,33 +468,56 @@ export default function qualityGate(pi: ExtensionAPI): void {
     }
 
     const root = await repoRoot(pi, ctx.cwd);
-    const lastGate = cycle.gateRuns.at(-1);
+    let lastGate = cycle.gateRuns.at(-1);
     const phaseRuns = cycle.phaseGateRuns.length;
     const gateStale = !lastGate || (lastGate.fingerprint !== null && lastGate.fingerprint !== current);
-    const requestGate = (prefix: string) =>
-      request(`${marker.id}:gate:${cycle.gateRuns.length}`, `Quality gate: run ${phaseRuns + 1}/${MAX_GATE_RUNS} requested`, RUN_REQUEST(phaseRuns + 1, prefix, root ?? "none", marker.timestamp), "gate-not-run");
 
     if (gateStale && phaseRuns >= MAX_GATE_RUNS) {
       finalize(marker.id, "cap-reached", cycle, ctx);
       return { decision: "block" as const, reason: CAP_REASON };
     }
-    if (!lastGate) return requestGate("");
-    if (gateStale) return requestGate(phaseRuns > 0 ? `Files changed after gate run ${phaseRuns}. ` : "Files changed after the reviews. ");
-    if (lastGate.status === "blocked") {
-      if (!nudged.has(lastGate.toolCallId)) {
-        nudged.add(lastGate.toolCallId);
+    if (gateStale) {
+      if (root === null) {
+        const report: GateReport = {
+          status: "findings",
+          summary: "not a git repository",
+          steps: [],
+          blockers: [],
+          findings: [{ step: "setup", detail: "Not a git repository; changed files cannot be determined, so no checks ran." }],
+          filesChangedByGate: [],
+        };
+        const run: GateRunData = { markerId: marker.id, id: randomUUID(), status: report.status, fingerprint: null, report };
+        pi.appendEntry(GATE_RUN_ENTRY, run satisfies GateRunData);
+        cycle.gateRuns.push(run);
+        cycle.phaseGateRuns.push(run);
+        finalize(marker.id, "findings", cycle, ctx);
+        return;
+      }
+
+      ctx.ui.notify(`Quality gate: run ${phaseRuns + 1}/${MAX_GATE_RUNS}`, "info");
+      const report = await runGate((command, args, options) => pi.exec(command, args, options), root, marker.timestamp, event.signal);
+      if (event.signal.aborted) return;
+      lastGate = { markerId: marker.id, id: randomUUID(), status: report.status, fingerprint: await fingerprint(pi, ctx.cwd), report };
+      pi.appendEntry(GATE_RUN_ENTRY, lastGate satisfies GateRunData);
+      cycle.gateRuns.push(lastGate);
+      cycle.phaseGateRuns.push(lastGate);
+      if (lastGate.status === "blocked" || lastGate.status === "findings") {
+        nudged.add(lastGate.id);
+        return { decision: "block" as const, reason: GATE_REPORT_REASON(report, phaseRuns + 1) };
+      }
+      current = lastGate.fingerprint;
+    } else if (lastGate?.status === "blocked") {
+      if (!nudged.has(lastGate.id)) {
+        nudged.add(lastGate.id);
         return { decision: "block" as const, reason: BLOCKED_REASON(phaseRuns) };
       }
       finalize(marker.id, "blocked", cycle, ctx);
       return;
+    } else if (lastGate?.status === "findings" && !nudged.has(lastGate.id)) {
+      nudged.add(lastGate.id);
+      return { decision: "block" as const, reason: GATE_REPORT_REASON(lastGate.report, phaseRuns) };
     }
-    if (lastGate.status === "error") {
-      if (phaseRuns >= MAX_GATE_RUNS) {
-        finalize(marker.id, "gate-error", cycle, ctx);
-        return;
-      }
-      return requestGate("The previous gate run returned no readable report. ");
-    }
+    if (!lastGate) return;
 
     if (root === null || current === null || !(await hasUnstagedChanges(pi, root))) {
       finalize(marker.id, lastGate.status, cycle, ctx);
@@ -518,16 +535,18 @@ export default function qualityGate(pi: ExtensionAPI): void {
       return;
     }
 
+    const kb = await reviewKb(pi, root);
     const due: ReviewItem[] = [];
     for (const agent of REVIEW_AGENTS) {
       const run = latest.find((entry) => entry.agent === agent);
       const needsRun = !run || run.status === "error" || (verdictFor(run)?.agreed.length ?? 0) > 0;
-      if (!needsRun) continue;
+      if (!needsRun || (agent === "code-review" && !run && kb.code.length === 0)) continue;
       if (run && run.run >= MAX_REVIEW_RUNS) {
         finalize(marker.id, "review-error", cycle, ctx);
         return;
       }
-      due.push({ agent, run: (run?.run ?? 0) + 1, dismissed: dismissedFor(cycle, agent) });
+      const names = agent === "code-review" ? kb.code : kb.entropy;
+      due.push({ agent, run: (run?.run ?? 0) + 1, dismissed: dismissedFor(cycle, agent), kb: names.join(", ") || "none" });
     }
     if (due.length > 0) {
       const labels = due.map((item) => `${item.agent} ${item.run}/${MAX_REVIEW_RUNS}`);

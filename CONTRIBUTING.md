@@ -58,8 +58,8 @@ Disposable fixtures (a repo to exercise an agent or extension) live in `~/src/<s
 
 ## Skills
 
-- Layout: `skills/<pack>/SKILL.md` (index), `<topic>.md` files, and `sources.md`. One level only; nested dirs are not discovered. `<pack>` is kebab-case and equals the frontmatter `name` and the router `domain`.
-- `SKILL.md` frontmatter, exactly:
+- Layout: `skills/<pack>/SKILL.md` (index), sibling `<topic>.md` files, and `sources.md`. One level only; nested skill directories are not discovered. `<pack>` is kebab-case and equals the frontmatter `name`; a deterministic KB has a `kb` mapping in that frontmatter.
+- Required `SKILL.md` frontmatter (a KB may add the optional `kb` mapping after `hide`):
 
 ```yaml
 ---
@@ -69,7 +69,13 @@ hide: true
 ---
 ```
 
-- `hide: true` keeps the pack out of the prompt's skill list, so the router is its only entry. A pack without `description` is skipped.
+- `kb` is optional; when present it is the sole source of deterministic KB routing:
+  - Allowed keys are `gate`, `files`, `roots`, `exclude`, `content`, `commands`, `mcp`, and `topics`. `gate` defaults to `files`; `commit-bound` cannot be combined with other keys.
+  - `files`, `roots`, and `exclude` are lowercase repo-relative globs; a `roots` match is a project marker (e.g. `**/databricks.yml`), and every non-excluded file under its directory counts for the KB; `content` probes inspect at most the first 262,144 bytes of matched files; `commands` are regexes over parsed bash segments; `mcp` contains `mcp__` name prefixes.
+  - Each topic names an existing sibling `.md` file and declares at least one `files`, `content`, or `commands` matcher.
+  - Topics refine a KB and never add it: an area lists a topic only when the KB's own `files`, `roots`, or `content` rules count a file in that area, so those rules must cover every path a topic targets.
+  - A skill is routed as a KB only when its `kb` mapping validates. The extension builds routing from this metadata; never hardcode domain names in extension code.
+- `hide: true` hides a skill from the available-skills list but does not disable its `skill://` URL or deterministic JIT injection.
 - `SKILL.md` body, in order: `# <Domain> KB`; the line `Defaults only: explicit instructions, AGENTS.md, repo config/conventions win. Read every topic whose trigger matches. Tags → skill://<pack>/sources.md.`; a `## Topics` table `| trigger | read |` whose read cells are `skill://<pack>/<topic>.md`; domain sections, `## Core` first; optional `## Diagnose (read-only)` and `## Local platform (observed <YYYY-MM-DD>; repo config wins)`.
 - Topic file: no frontmatter; line 1 `# <Title>`; line 2 `Tags → skill://<pack>/sources.md.`; `##` sections of bullets; lowercase kebab-case filename.
 - `sources.md`: `# <Domain> KB sources`; line 2 `Verified <YYYY-MM-DD> against <sources>. Re-verify on <upgrade triggers>.`; a `| tag | source |` table (tag families such as `P<n>`, `HC:<path>`); `## Snapshot` (observed versions); `## Conflicts resolved`; optional `## Open (ask user when first needed)`.
@@ -77,15 +83,15 @@ hide: true
 - Size: `SKILL.md` ≤ 140 lines, topics ≤ 80 (current maxima 138 and 76); split a topic rather than exceed.
 - Defer to the owning pack instead of duplicating (airflow links `skill://python` for Python style).
 - A pack without topics (`coding-entropy`) is one `SKILL.md` ending in `## Sources`.
-- Adding a pack = pack + router row (§ Router) in one change; removing one = its dir, router row, and prefixed rules together.
+- Adding a KB = pack + valid `kb` metadata. Removing one = remove the pack and its prefixed rules together.
 - Verify: `omp read skill://<pack>`, then `omp read skill://<pack>/<file>` for every index target and `sources.md`, each returning content, never `File not found`; every tag family used has a `sources.md` row.
 
 ## Router
 
-- `rules/domain-router.md`: frontmatter `alwaysApply: true` and the directive line stay unchanged. One row per pack, appended after the last row: `| <pack> | <triggers> | skill://<pack> |`.
-- Triggers: file globs first, space-separated, if any; then `; ` and comma-separated topic keywords; then optional `Skip: <exclusions>`. Models: python row (globs only), airflow row (globs + keywords), databricks-silver-modeling row (keywords + Skip). The router rides in every session, so list only what selects the pack.
-- The model applies routing; the harness enforces nothing. Standalone `omp read rule://domain-router` returns `Unknown rule` with `Available: none` (the CLI has no rules loaded); that is not a failure.
-- Verify: `omp -p --no-session --no-tools "Per the domain router in your context, which skill:// URI covers <trigger>? Reply with only the URI."` → `skill://<pack>`.
+- `rules/domain-router.md` stays `alwaysApply: true` and carries the deterministic-router directive. Do not restore the legacy trigger/URL table.
+- Each KB's `SKILL.md` `kb` mapping is the sole routing source for files, project roots, content, commands, MCP tools, topics, and commit-bound rules. A new KB does not require an extension-code/domain-union change.
+- Agents consume the index through the extension: the orientation lists `./` and depth-1 areas, the `project_index` tool answers path queries, and `read` of `.omp/project-index.yaml` is blocked like writes.
+- Verify with a fresh OMP process in a disposable repo: inspect the generated index, catalog, and first-touch delivery; restart after extension or skill changes.
 
 ## TTSR rules
 
@@ -99,6 +105,8 @@ hide: true
 | `py-` | python |
 | `dbp-` | databricks-platform |
 | `dbx-silver-` | databricks-silver-modeling |
+| `dg-` | dagster |
+| `sf-` | snowflake |
 
 - A new pack gets a new prefix that is not equal to, a prefix of, or prefixed by any of these or the builtin `go-`, `rs-`, `ts-` (a same-name user rule shadows a builtin); add it to this table. `domain-router` is the only unprefixed rule. Never create `rules/RULES.md`: it shadows the sticky `RULES.md`.
 - Frontmatter, in this key order:
@@ -133,7 +141,7 @@ interruptMode: never
 - `output`: a JSON schema with `additionalProperties: false` and complete `required` lists at every level.
 - Body: `## Inputs`, numbered step sections, `## Report`.
 - Names match exactly and first wins, so a file here replaces the bundled agent of the same name. Never run `omp agents unpack` into this dir: the copies would shadow the bundled agents and freeze them against updates.
-- Coupled to `extensions/quality-gate.ts`: agent names `quality-gate`, `entropy-review`, `code-review`; gate `status` values `pass|findings|blocked|skipped`; reviewer `status` and `findings[].id|file|line|rule`; the `review_verdict` agent enum. Change these only together with `quality-gate.ts`.
+- `extensions/quality-gate.ts` owns gate and review cycles; the gate runs in `extensions/lib/gate-runner.ts`, with review agents `entropy-review` and `code-review`. Gate outcomes are `pass|findings|blocked|skipped`; reviewer statuses and `review_verdict` data remain coupled to the extension.
 - Verify: `omp -p --no-session --tools task "Without calling any tool, list the agent names your task tool offers, one per line."` includes `<name>`; one task on a disposable fixture returns output that fits the schema.
 
 ## Extensions
@@ -141,6 +149,8 @@ interruptMode: never
 - File `extensions/<name>.ts`: `export default function <camelName>(pi: ExtensionAPI)`, returning `void` or a promise. Imports: `node:*` builtins and `import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"`; schemas via `pi.arktype`. No other packages (`AGENTS.md` dependency rule).
 - Helpers go in a subdir without `index.ts` (e.g., `extensions/lib/`), imported as `./lib/<file>.ts`. A top-level helper is loaded as an extension and fails (omp://extension-loading.md).
 - Persisted entry and message types: `jpollock.<extension>.<entry>`. Registered tools: snake_case and unique in the tool list.
+- `extensions/policy-guard.ts` checks bash commands, dependency manifests, and MCP tools; it does not classify `eval` calls. Eval approval follows OMP's built-in policy (`omp://approval-mode.md`).
+- `extensions/jira-plan-decisions.ts` stages each approved plan's decisions (`ask` answers plus the plan's Context and Assumptions sections) as a Jira comment, has the model post it through `mcp__atlassian_addoreditjiraissuecomment`, and substitutes the staged body in `tool_call`; policy-guard's confirm is the per-post consent, so that tool stays out of `MCP_READ_ALLOWLIST` in `extensions/lib/policy.ts`. Approval detection (`findPlanMarker`) lives in `extensions/lib/session.ts`, shared with `quality-gate.ts`.
 - Extensions load once at OMP startup, so edits apply after a restart. Load errors go to `~/.omp/logs/omp.<date>.<pid>.log`.
 - There is no typecheck or lint config and no quality-gate group for `.ts`; the builtin `ts-*` TTSR rules fire on `.ts` edits.
 - Verify: run `omp -p --no-session --no-tools "Reply OK."`; the newest `~/.omp/logs/omp.*.log` shows no load error naming `<name>.ts`; exercise each event path on a disposable fixture.

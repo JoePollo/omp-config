@@ -3,8 +3,9 @@ description: "Grant Unity Catalog privileges to groups, not users; Terraform own
 condition:
   - '(?i)\bGRANT\b[^;]{0,300}?\bTO\s+`[^`]*@[^`]*`'
 scope: "tool:edit(*.{sql,py,ipynb}), tool:write(*.{sql,py,ipynb})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Unity Catalog grants go to IdP-managed groups (service principals for jobs), never individual users; `ALL PRIVILEGES` and `MANAGE` sparingly.
 
 ## Avoid

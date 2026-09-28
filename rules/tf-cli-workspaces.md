@@ -3,8 +3,9 @@ description: "Environments are tfvars plus one state key per environment, not CL
 condition:
   - '\bterraform\.workspace\b'
 scope: "tool:edit(*.tf), tool:write(*.tf)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 CLI workspaces share one backend configuration and credentials, so they can't isolate dev, tst, and prd.
 
 ## Avoid

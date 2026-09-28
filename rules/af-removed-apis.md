@@ -8,8 +8,9 @@ condition:
   - '\bSubDagOperator\b'
   - '\bdays_ago\s*\('
 scope: "tool:edit(**/dags/**/*.py), tool:write(**/dags/**/*.py), tool:edit(**/include/**/*.py), tool:write(**/include/**/*.py), tool:edit(**/plugins/**/*.py), tool:write(**/plugins/**/*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 These Airflow 2 arguments and helpers no longer exist in Airflow 3.
 
 | avoid | use |

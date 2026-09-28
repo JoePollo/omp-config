@@ -4,8 +4,9 @@ condition:
   - '\bexcept\s*:'
   - '\bexcept\s*\(?\s*(?:BaseException|Exception)\s*\)?\s*(?:as\s+\w+\s*)?:\s*(?:pass\b|continue\b|\.\.\.)'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 PEP 8: name the exceptions you expect; keep the `try` body minimal.
 
 ## Avoid

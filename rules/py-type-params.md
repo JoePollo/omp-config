@@ -6,8 +6,9 @@ condition:
   - '\bGeneric\['
   - '\bParamSpec\('
 scope: "tool:edit(*.py), tool:write(*.py), tool:edit(*.pyi), tool:write(*.pyi)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 PEP 695 (3.12+): declare type parameters inline; `type` for aliases.
 
 | legacy | 3.12+ |

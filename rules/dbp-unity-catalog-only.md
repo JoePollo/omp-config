@@ -5,8 +5,9 @@ condition:
   - '\bdbutils\.fs\.(?:mount|unmount|updateMount|refreshMounts|mounts)\('
   - '(?i)\bhive_metastore\.'
 scope: "tool:edit(*.{sql,py,ipynb,yml,yaml}), tool:write(*.{sql,py,ipynb,yml,yaml})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Data and files go through Unity Catalog; DBFS mounts and `hive_metastore` bypass its access control, auditing, and lineage.
 
 | avoid | use |

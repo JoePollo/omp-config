@@ -4,8 +4,9 @@ condition:
   - '(?m)^[ \t]*provisioner[ \t]+"'
   - '(?m)^[ \t]*resource[ \t]+"null_resource"'
 scope: "tool:edit(*.tf), tool:write(*.tf)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Terraform can't model provisioner behavior; a failed create-time provisioner taints the resource and forces replacement.
 
 - First choice: a provider resource or data source for the task, or a pipeline step outside Terraform.

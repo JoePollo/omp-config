@@ -4,8 +4,9 @@ condition:
   - '(?<![\w-])-upgrade\b'
   - '(?i)\bterraformVersion[ \t]*:[ \t]*["'']?latest\b'
 scope: "tool:edit(*.{yml,yaml}), tool:write(*.{yml,yaml})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Plan and apply must run the CLI and provider versions the lock file records.
 
 ## Avoid

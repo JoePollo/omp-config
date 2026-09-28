@@ -5,8 +5,9 @@ condition:
   - '\b(?:pickle|cPickle|dill|marshal|shelve)\.(?:loads?|open)\('
   - '(?m)(?:^|[^\w.])(?:eval|exec)\('
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 | avoid | use |
 |---|---|
 | `yaml.load(f)` | `yaml.safe_load(f)` |

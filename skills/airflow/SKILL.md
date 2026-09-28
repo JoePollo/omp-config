@@ -2,11 +2,40 @@
 name: airflow
 description: Apache Airflow 3 on Astronomer Astro knowledge base (DAG authoring, parse-time rules, tasks, Astro projects and deploys, Databricks orchestration). Routed by rule://domain-router.
 hide: true
+kb:
+  files: ['**/.astro/config.yaml', '**/airflow_settings.yaml', '**/.airflowignore']
+  content:
+    - { files: '**/*.py', pattern: '^\s*(?:from|import)\s+airflow\b' }
+    - { files: '**/dockerfile', pattern: 'astro-runtime|astrocrpublic\.azurecr\.io/runtime' }
+  commands: ['^(?:astro|airflow)\b']
+  mcp: ['mcp__airflow_']
+  topics:
+    - file: authoring.md
+      content: [{ files: '**/*.py', pattern: '^\s*from\s+airflow\.sdk\s+import\b|@dag\b|\bDAG\s*\(' }]
+    - file: parsing.md
+      files: ['**/.airflowignore']
+      content: [{ files: '**/*.py', pattern: '@dag\b|\bDAG\s*\(' }]
+    - file: tasks.md
+      content: [{ files: '**/*.py', pattern: '@task\b|\bXCom\b|Sensor\b|\bdeferrable\s*=' }]
+    - file: astro-project.md
+      files: ['**/.astro/config.yaml', '**/airflow_settings.yaml', '**/packages.txt']
+      content: [{ files: '**/dockerfile', pattern: 'astro-runtime|astrocrpublic\.azurecr\.io/runtime' }]
+      commands: ['^astro\s+dev\b']
+    - file: astro-deploy.md
+      commands: ['^astro\s+(?:deploy|deployment)\b']
+    - file: testing.md
+      content: [{ files: '**/tests/**/*.py', pattern: '^\s*(?:from|import)\s+airflow\b|\bDagBag\b' }]
+      commands: ['^astro\s+dev\s+(?:parse|pytest)\b', '^airflow\s+dags\s+test\b']
+    - file: databricks.md
+      content: [{ files: '**/*.py', pattern: '\bairflow\.providers\.databricks\b' }]
 ---
+
 # Airflow on Astro KB
+
 Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; skill://databricks-platform owns Databricks-side design and skill://python owns general Python style. Read every topic whose trigger matches. Tags → skill://airflow/sources.md.
 
 ## Topics
+
 | trigger | read |
 |---|---|
 | DAG definition, `airflow.sdk` imports, `@dag`/`@task`, operators, schedules, timetables, `start_date`, `catchup`, params, Jinja templates, context keys, trigger rules, branching, task groups, setup/teardown, assets, cross-DAG triggers, callbacks, notifiers, Deadline Alerts, Airflow 2 → 3 migration | skill://airflow/authoring.md |
@@ -18,6 +47,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; sk
 | Databricks jobs, pipelines, or SQL from Airflow; `apache-airflow-providers-databricks`; `databricks` connection | skill://airflow/databricks.md |
 
 ## Core
+
 - Target Astro Runtime `3.2-6` = Airflow 3.2.2, Python 3.13 (3.12–3.14 supported); anything documented as 3.3+ is unavailable. In an Astro project read `Dockerfile` (Runtime tag), `requirements.txt` (provider pins), `tests/`, and the CI pipeline first — they win over this KB. [RT:runtime-release-notes, CLI:develop-project, U]
 - Author against `airflow.sdk` and provider modules only; never Airflow 2 paths (`airflow.models.DAG`, `airflow.decorators`, `airflow.operators.*`) or removed arguments. [AF:public-airflow-interface, AF:installation/upgrading_to_airflow3]
 - DAG files are configuration re-parsed at least every 30 s: module level builds DAG objects from static values; I/O, Variable/Connection lookups, hook construction, and heavy imports belong inside task callables. [AF:best-practices, LEARN:dag-best-practices]
@@ -34,6 +64,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; sk
 - Python style: skill://python; DAG files override it only for parse time (heavy imports inside tasks); task callables validate `params`/XCom input into models and push `model.model_dump(mode="json")`. [U, AF:best-practices]
 
 ## Diagnose (read-only)
+
 Airflow MCP servers `airflow-dev`, `airflow-tst`, `airflow-prd` (`astro-airflow-mcp`, `AF_READ_ONLY=true`); "connection refused" to `localhost:8080` means that server's API URL is blank → use the local commands. [U]
 
 | question | tool / command |
@@ -53,6 +84,7 @@ Never without explicit permission: MCP `trigger_dag`, `trigger_dag_and_wait`, `p
 [U, CLI:astro-dev-parse, CLI:astro-dev-run, CLI:astro-dev-logs, CLI:astro-dev-bash, ASTRO:view-logs, ASTRO:deployment-health-incidents]
 
 ## Local platform (observed 2026-09-25; repo config wins)
+
 - One `DEDICATED` Astro Deployment per environment on Azure `centralus` (cluster `beginner_cluster`): `dev-Data-Platform-Pipelines`, `tst-Data-Platform-Pipelines`, `prd-Data-Platform-Pipelines`; dev feature branches get `<branch>_ephemeral_feature_deployment`. [U]
 - Executor `ASTRO`; CI/CD enforced; DAG-only deploys enabled; task pod default 0.25 CPU / 0.5Gi. [U]
 - Scheduler: dev `SMALL` (development mode), tst `MEDIUM`, prd `MEDIUM` with high availability; quota 10 CPU / 20Gi. [U]

@@ -3,8 +3,9 @@ description: "Write X | None and A | B, not Optional/Union (PEP 604, 3.10)"
 condition:
   - '(?m)(?:^|[^\w.])(?:typing\.)?(?:Optional|Union)\['
 scope: "tool:edit(*.py), tool:write(*.py), tool:edit(*.pyi), tool:write(*.pyi)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 PEP 604 (3.10+): unions use `|` in annotations, aliases, and `isinstance`.
 
 ## Avoid

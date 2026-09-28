@@ -2,11 +2,40 @@
 name: terraform
 description: Terraform domain knowledge base (HashiCorp language and CLI guidance, azurerm/azuread/azapi, Databricks and Astro providers, Azure DevOps pipelines, house repo conventions). Routed by rule://domain-router.
 hide: true
+kb:
+  files: ['**/*.tf', '**/*.tfvars', '**/*.tftest.hcl', '**/*.tf.json', '**/.terraform.lock.hcl']
+  content:
+    - { files: '**/*.{yml,yaml}', pattern: '\bterraform\b', flags: i }
+  commands: ['^terraform\b']
+  topics:
+    - file: language.md
+      files: ['**/*.tf']
+    - file: modules.md
+      files: ['**/modules/**/*.tf', '**/.terraform.lock.hcl']
+      content: [{ files: '**/*.tf', pattern: '^\s*module\s+"|\brequired_providers\b' }]
+    - file: state.md
+      content: [{ files: '**/*.tf', pattern: '^\s*(?:backend\s+"|moved\s*\{|import\s*\{|removed\s*\{)' }]
+    - file: security.md
+      content: [{ files: '**/*.{tf,tfvars}', pattern: '\bsensitive\s*=\s*true\b|\bephemeral\s+"|_wo\s*=' }]
+    - file: pipelines.md
+      content: [{ files: '**/*.{yml,yaml}', pattern: '\bterraform\b', flags: i }]
+    - file: testing.md
+      files: ['**/*.tftest.hcl']
+      commands: ['^terraform\s+(?:-chdir=\S+\s+)?(?:test|validate)\b']
+    - file: azure.md
+      content: [{ files: '**/*.tf', pattern: '\b(?:azurerm|azuread|azapi)_[a-z0-9_]+\b' }]
+    - file: databricks.md
+      content: [{ files: '**/*.tf', pattern: '"databricks_[a-z0-9_]+"|databricks/databricks' }]
+    - file: astro.md
+      content: [{ files: '**/*.tf', pattern: '"astro_[a-z0-9_]+"|astronomer/astro' }]
 ---
+
 # Terraform KB
+
 Defaults only: explicit instructions, AGENTS.md, repo guidance (`.github/copilot-instructions.md`, `.github/instructions/*.md`, `.github/index.md`, `README.md`), and existing repo conventions win; skill://databricks-platform owns Unity Catalog privilege semantics. Read every topic whose trigger matches. Tags → skill://terraform/sources.md.
 
 ## Topics
+
 | trigger | read |
 |---|---|
 | variables, outputs, locals, `count`/`for_each`, `dynamic`, validation, pre/postconditions, `check`, naming, file layout, provisioners | skill://terraform/language.md |
@@ -20,6 +49,7 @@ Defaults only: explicit instructions, AGENTS.md, repo guidance (`.github/copilot
 | `astro` provider, Astro deployments/workspaces/teams/tokens, astro-tf-platform, astro-admin-rbac | skill://terraform/astro.md |
 
 ## Core
+
 - Existing repos: keep their layout, naming, constraint style, and pipeline shape; change only what the task needs; propose retrofits of §Local platform anti-patterns, never apply them unasked. [U]
 - Work statically: `terraform fmt`, `terraform init -backend=false -input=false`, `terraform validate`; never run `plan`, `apply`, `import`, `state`, `refresh`, `output`, `force-unlock`, or a backend `init` against live state or cloud APIs unless the user explicitly asks for that command. [U, DIAC:.github/copilot-instructions.md, DAR:README.md]
 - Change infrastructure only through reviewed configuration the pipeline plans: `import`, `moved`, `removed` blocks, never CLI state surgery. [HC:language/modules/develop/refactoring, HC:language/block/removed, HC:cli/commands/state/rm]
@@ -31,6 +61,7 @@ Defaults only: explicit instructions, AGENTS.md, repo guidance (`.github/copilot
 - Tooling is the `terraform` CLI only; tflint, trivy, checkov, terraform-docs, and pre-commit are neither installed nor configured in any repo: never add them unasked. [U]
 
 ## Version gates (floor = lowest version `required_version` allows)
+
 | feature | min |
 |---|---|
 | `moved` blocks | 1.1 |
@@ -49,12 +80,14 @@ Defaults only: explicit instructions, AGENTS.md, repo guidance (`.github/copilot
 [TFR:1.1, TFR:1.3, TFR:1.5, TFR:1.6, TFR:1.7, TFR:1.8, TFR:1.9, TFR:1.10, TFR:1.11, TFR:1.14, TFR:1.15, TFR:1.16]
 
 ## Workflow
+
 - After each edit batch, in every changed root or module directory: `terraform fmt`, `terraform init -backend=false -input=false`, `terraform validate`; the plan-end quality gate reruns them. [U, DAR:README.md]
 - The formatter owns layout; never hand-align or reformat untouched files. [HC:language/style]
 - Unsure of a resource's arguments or import ID: read that provider's docs at the pinned version (registry page or the provider repo's `docs/`); never guess. [HAS:terraform-style-guide, HC:language/block/import]
 - Summaries name every plan-affecting consequence: replacements, destroys, moves, imports, `removed` blocks, grant or permission removals. [U, HC:tutorials/automation/automate-terraform]
 
 ## Local platform (observed 2026-09-25; repo config wins)
+
 | repo | owns | env inputs | state key | pipeline |
 |---|---|---|---|---|
 | `~/src/astro-admin-rbac` | Astro resource group, user-assigned identity, Azure role assignments | `environments/<env>.tfvars` | `<env>-rbac-astro-01.tfstate` | in-repo `.azure-pipelines/build.yml` |
@@ -63,5 +96,6 @@ Defaults only: explicit instructions, AGENTS.md, repo guidance (`.github/copilot
 | `~/src/Databricks-IaC` | workspace infrastructure, UC securables and grants, workspace ACLs, compute, connections | `tfvars/<env>.tfvars`, `tfvars/<env>-import.tfvars` | `<env>-databricks-iac.tfstate` | extends `databricks/terraform/apply.yml@templates` |
 
 [AAR:.azure-pipelines/build.yml, ATP:.azure-pipelines/build.yml, DAR:README.md, DIAC:.github/index.md]
+
 - Shared: azurerm backend, key passed as `terraform init -backend-config=key=…`; ADO parameter `environment` selects tfvars, service connection, and key; no `provider` blocks in modules. [U]
 - Known anti-patterns, never copied into new code: `terraform init -upgrade` every run, `TerraformInstaller@1` `latest`, automatic `az storage blob lease break`, refresh-only `apply -auto-approve` without the reviewed plan, preview `apply`/`destroy -auto-approve`, `ARM_CLIENT_SECRET` exports (astro repos); no lock file (astro-admin-rbac); `.gitignore` without state/plan patterns (data-admin-rbac, Databricks-IaC); literal Databricks account ID in the provider block (data-admin-rbac). [U]

@@ -3,8 +3,9 @@ description: "Key repeated instances with for_each over stable keys, not count =
 condition:
   - '(?m)\bcount[ \t]*=[ \t]*length\([^()\n]*\)[ \t]*$'
 scope: "tool:edit(*.tf), tool:write(*.tf)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 `count = length(list)` addresses instances by index: inserting or removing an element shifts every later index and replaces those objects.
 
 ## Avoid

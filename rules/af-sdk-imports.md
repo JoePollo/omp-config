@@ -8,8 +8,9 @@ condition:
   - '\bfrom\s+airflow\.(?:sensors\.base|hooks\.base|utils\.task_group|utils\.dates|datasets)\s+import\b'
   - '\bfrom\s+airflow\.(?:operators|sensors)\.(?:bash|python|empty|dummy|trigger_dagrun|latest_only|external_task|date_time|time_delta|filesystem)\s+import\b'
 scope: "tool:edit(*.py), tool:write(*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Airflow 3.2 authoring imports come from `airflow.sdk` and provider packages; Airflow 2 paths are removed or deprecated shims.
 
 | avoid | use |

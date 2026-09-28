@@ -3,8 +3,9 @@ description: "Don't coalesce/repartition to a fixed count right before Delta wri
 condition:
   - '\.(?:coalesce|repartition)\(\s*\d+\s*\)[\s\\]*\.write'
 scope: "tool:edit(*.{py,ipynb}), tool:write(*.{py,ipynb})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Optimized writes and auto-tuned file sizes set Delta file counts; `coalesce(n)`/`repartition(n)` just before a write works against them.
 
 ## Avoid

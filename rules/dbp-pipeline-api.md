@@ -10,8 +10,9 @@ condition:
   - '\b(?:FROM|JOIN)\s+LIVE\.\w'
   - '\bSTREAM\s*\(\s*LIVE\.\w'
 scope: "tool:edit(*.{sql,py,ipynb}), tool:write(*.{sql,py,ipynb})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 New pipeline code uses `pyspark.pipelines` and current SQL; `dlt`, `LIVE`, and `APPLY CHANGES` still run but are legacy.
 
 | legacy | current |

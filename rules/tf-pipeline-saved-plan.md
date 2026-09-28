@@ -5,8 +5,9 @@ condition:
   - '\blease[ \t]+break\b'
   - '\bforce-unlock\b'
 scope: "tool:edit(*.{yml,yaml}), tool:write(*.{yml,yaml})"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 Apply exactly the plan a human approved; a held state lease means another run is active.
 
 ## Avoid

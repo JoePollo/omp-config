@@ -6,8 +6,9 @@ condition:
   - '\bnew_cluster\s*='
   - '["'']new_cluster["'']\s*:'
 scope: "tool:edit(**/dags/**/*.py), tool:write(**/dags/**/*.py), tool:edit(**/include/**/*.py), tool:write(**/include/**/*.py)"
-interruptMode: never
+interruptMode: tool-only
 ---
+
 The Databricks `data_platform` bundle defines and deploys jobs, pipelines, and compute; Airflow triggers and monitors them.
 
 | avoid | use |
