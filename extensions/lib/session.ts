@@ -16,6 +16,7 @@ export type BranchEntry = {
   details?: Record<string, unknown>;
   firstKeptEntryId?: string;
   task?: unknown;
+  agent?: string;
   mode?: string;
 };
 
@@ -26,6 +27,10 @@ type PlanMarker = {
 };
 
 export type Exec = (command: string, args: string[], options: { cwd: string; timeout?: number; signal?: AbortSignal }) => Promise<{ stdout: string; stderr: string; code: number; killed?: boolean }>;
+
+export function execBudget(deadline: number, capMs: number): number {
+  return Math.max(1, Math.min(capMs, deadline - Date.now()));
+}
 
 export function textOf(content: unknown): string {
   if (typeof content === "string") return content;

@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, closeSync, openSync, readFileSync, readSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
+import { SUPPRESSIONS_RELATIVE_PATH } from "./review-suppressions.ts";
 import type { Exec } from "./session.ts";
 import type { KbSkill, Probe } from "./skills.ts";
 
 export const INDEX_RELATIVE_PATH = ".omp/project-index.yaml";
-export const GITIGNORE_LINE = "/.omp/project-index.yaml";
+export const GITIGNORE_LINE = "/.omp/";
+const LOCAL_FILES = [INDEX_RELATIVE_PATH, SUPPRESSIONS_RELATIVE_PATH];
 
 export type RepoRef = { worktreeRoot: string; mainRoot: string; indexPath: string };
 export type AreaEntry = {
@@ -322,8 +324,9 @@ export async function resolveRepo(exec: Exec, dir: string): Promise<RepoRef | nu
 }
 
 export async function ensureGitignored(exec: Exec, repo: RepoRef): Promise<boolean> {
-  const result = await exec("git", ["check-ignore", "-v", "--", INDEX_RELATIVE_PATH], { cwd: repo.mainRoot });
-  if (result.code === 0 && /\.gitignore:\d+:/.test(result.stdout.split("\t", 1)[0] ?? "")) return false;
+  const result = await exec("git", ["check-ignore", "--no-index", "-v", "--", ...LOCAL_FILES], { cwd: repo.mainRoot });
+  const decided = result.stdout.split("\n").filter((line) => /\.gitignore:\d+:/.test(line.split("\t", 1)[0]));
+  if (decided.length === LOCAL_FILES.length) return false;
   let current = "";
   try {
     current = readFileSync(join(repo.mainRoot, ".gitignore"), "utf8");

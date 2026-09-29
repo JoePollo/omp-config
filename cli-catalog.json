@@ -1,0 +1,170 @@
+{
+  "astro": {
+    "commands": {
+      "deployment inspect": "read",
+      "deployment list": "read",
+      "deployment logs": "read",
+      "organization list": "read",
+      "organization switch": "read",
+      "workspace list": "read",
+      "workspace switch": "read"
+    },
+    "globalFlags": {
+      "--help": "boolean",
+      "-h": "boolean"
+    },
+    "readVerbPrefixes": [],
+    "readVerbs": [],
+    "resolver": "help",
+    "subtrees": {
+      "completion": "read",
+      "config": "read",
+      "context": "read",
+      "dev": "read",
+      "help": "read",
+      "login": "read",
+      "logout": "read",
+      "run": "read",
+      "version": "read"
+    }
+  },
+  "az": {
+    "commands": {
+      "account clear": "read",
+      "account get-access-token": "read",
+      "account list": "read",
+      "account list-locations": "read",
+      "account set": "read",
+      "account show": "read",
+      "extension list": "read",
+      "extension list-available": "read",
+      "extension show": "read"
+    },
+    "globalFlags": {
+      "--debug": "boolean",
+      "--help": "boolean",
+      "--only-show-errors": "boolean",
+      "--output": "value",
+      "--query": "value",
+      "--subscription": "value",
+      "--verbose": "boolean",
+      "--version": "boolean",
+      "-h": "boolean",
+      "-o": "value"
+    },
+    "readVerbPrefixes": ["get-", "list-", "show-"],
+    "readVerbs": [
+      "browse",
+      "cat",
+      "check",
+      "describe",
+      "download",
+      "exists",
+      "export",
+      "get",
+      "list",
+      "logs",
+      "ls",
+      "me",
+      "query",
+      "show",
+      "status",
+      "summary",
+      "tail",
+      "validate",
+      "version",
+      "wait"
+    ],
+    "resolver": "leading-words",
+    "subtrees": {
+      "config": "read",
+      "find": "read",
+      "help": "read",
+      "login": "read",
+      "logout": "read",
+      "rest": "read",
+      "version": "read"
+    }
+  },
+  "databricks": {
+    "commands": {
+      "api get": "read",
+      "api head": "read",
+      "apps manifest": "read",
+      "bundle deployment bind": "write",
+      "bundle init": "read",
+      "bundle open": "read",
+      "bundle schema": "read",
+      "bundle summary": "read",
+      "bundle validate": "read",
+      "grants get-effective": "read",
+      "labs installed": "read",
+      "pipelines history": "read",
+      "pipelines open": "read",
+      "secrets get-secret": "write",
+      "secrets-uc get-secret": "write",
+      "serving-endpoints query": "write"
+    },
+    "globalFlags": {
+      "--debug": "boolean",
+      "--help": "boolean",
+      "--output": "value",
+      "--profile": "value",
+      "--target": "value",
+      "--version": "boolean",
+      "-h": "boolean",
+      "-o": "value",
+      "-p": "value",
+      "-t": "value",
+      "-v": "boolean"
+    },
+    "readVerbPrefixes": [
+      "export-",
+      "genie-get-",
+      "genie-list-",
+      "get-",
+      "list-",
+      "query-",
+      "search-"
+    ],
+    "readVerbs": [
+      "batch-get",
+      "build-logs",
+      "cat",
+      "cluster-status",
+      "current",
+      "download",
+      "events",
+      "exists",
+      "export",
+      "get",
+      "list",
+      "logs",
+      "ls",
+      "me",
+      "read",
+      "scan-index",
+      "search",
+      "share-permissions",
+      "show",
+      "spark-versions",
+      "status",
+      "summary",
+      "validate",
+      "validate-credential",
+      "version"
+    ],
+    "resolver": "help",
+    "subtrees": {
+      "auth": "read",
+      "bundle generate": "read",
+      "completion": "read",
+      "configure": "read",
+      "help": "read",
+      "psql": "write",
+      "quickstart": "read",
+      "sync": "write",
+      "version": "read"
+    }
+  }
+}

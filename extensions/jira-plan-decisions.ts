@@ -2,10 +2,10 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { findPlanMarker, latestMode, textOf, type BranchEntry } from "./lib/session.ts";
 import { mcpToolName, recordInput } from "./lib/tool-args.ts";
 
-const STORY_ENTRY = "jpollock.jira-plan-decisions.story";
-const PENDING_ENTRY = "jpollock.jira-plan-decisions.pending";
-const OUTCOME_ENTRY = "jpollock.jira-plan-decisions.outcome";
-const REQUEST_MESSAGE = "jpollock.jira-plan-decisions.request";
+const STORY_ENTRY = "jira-plan-decisions.story";
+const PENDING_ENTRY = "jira-plan-decisions.pending";
+const OUTCOME_ENTRY = "jira-plan-decisions.outcome";
+const REQUEST_MESSAGE = "jira-plan-decisions.request";
 const COMMENT_TOOL = "mcp__atlassian_addoreditjiraissuecomment";
 const JIRA_CLOUD_ID = "312bcfb3-bcfa-4a50-8288-79546cce4310";
 const STAGED_BODY = "@staged";
@@ -224,7 +224,6 @@ function outcomeNotice(outcome: OutcomeData): string {
 
 export default function jiraPlanDecisions(pi: ExtensionAPI): void {
   let carried: Cycle | null = null;
-  let staging: Promise<void> = Promise.resolve();
   const reminders = new Map<string, number>();
 
   function cycleFor(branch: readonly BranchEntry[], approval: Approval, sessionId: string): Cycle {
@@ -234,21 +233,16 @@ export default function jiraPlanDecisions(pi: ExtensionAPI): void {
       ?? { planFilePath: approval.planFilePath, sessionId, story: undefined, answers: [] };
   }
 
-  async function stage(ctx: Ctx): Promise<void> {
+  function stage(ctx: Ctx): void {
     const branch = branchOf(ctx);
     const approval = approvalAt(branch);
     if (!approval) return;
     const cycle = cycleFor(branch, approval, ctx.sessionManager.getSessionId());
-    const key = cycle.story === undefined ? await chooseStory([], ctx.ui) : cycle.story;
+    const key = cycle.story ?? null;
     const body = composeComment(approval, cycle);
     pi.appendEntry(PENDING_ENTRY, { key, body } satisfies PendingData);
     if (key) pi.sendMessage(requestMessage(key, body), { deliverAs: "aside" });
     else ctx.ui.notify("Jira: no story for this plan, so its decisions were not posted. /jira-story <KEY> posts them.", "warning");
-  }
-
-  function stageInOrder(ctx: Ctx): Promise<void> {
-    staging = staging.then(() => stage(ctx), () => stage(ctx));
-    return staging;
   }
 
   function recordOutcome(ctx: Ctx): OpenPost | null {
@@ -272,6 +266,13 @@ export default function jiraPlanDecisions(pi: ExtensionAPI): void {
     return undefined;
   }
 
+  function recordPromptStory(prompt: string, ui: Ui): void {
+    const candidates = issueKeys(prompt);
+    if (candidates.length === 1) pi.appendEntry(STORY_ENTRY, { key: candidates[0] });
+    if (candidates.length > 1) ui.notify(`Jira: this prompt names ${candidates.join(", ")}; /jira-story <KEY> sets this plan's story.`, "warning");
+    else notifyStory(ui, candidates[0] ?? null);
+  }
+
   pi.registerCommand("jira-story", {
     description: "Set the Jira story for this plan's decisions; outside plan mode, re-post unposted plan decisions to it",
     handler: async (args, ctx) => {
@@ -289,13 +290,11 @@ export default function jiraPlanDecisions(pi: ExtensionAPI): void {
     },
   });
 
-  pi.on("before_agent_start", async (event, ctx) => {
+  pi.on("before_agent_start", (event, ctx) => {
     const branch = branchOf(ctx);
     const cycle = ctx.hasUI && latestMode(branch) === "plan" ? collectCycle(branch, ctx.sessionManager.getSessionId()) : null;
     if (!cycle || cycle.story !== undefined) return;
-    const key = await chooseStory(issueKeys(event.prompt), ctx.ui);
-    pi.appendEntry(STORY_ENTRY, { key });
-    notifyStory(ctx.ui, key);
+    recordPromptStory(event.prompt, ctx.ui);
   });
 
   pi.on("session_before_switch", (event, ctx) => {
@@ -310,15 +309,15 @@ export default function jiraPlanDecisions(pi: ExtensionAPI): void {
     return revised ? { input: revised } : undefined;
   });
 
-  pi.on("turn_end", async (_event, ctx) => {
+  pi.on("turn_end", (_event, ctx) => {
     if (!ctx.hasUI) return;
-    await stageInOrder(ctx);
+    stage(ctx);
     recordOutcome(ctx);
   });
 
-  pi.on("session_stop", async (event, ctx) => {
+  pi.on("session_stop", (event, ctx) => {
     if (event.signal.aborted || !ctx.hasUI) return undefined;
-    await stageInOrder(ctx);
+    stage(ctx);
     const post = recordOutcome(ctx);
     return post ? remind(post, ctx) : undefined;
   });

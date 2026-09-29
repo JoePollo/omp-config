@@ -1,0 +1,411 @@
+{
+  "mcp__agent_sql_server_list_connections": "read",
+  "mcp__agent_sql_server_query_sql": "read",
+  "mcp__agent_sql_server_setup_config": "write",
+  "mcp__airflow_dev_clear_dag_run": "write",
+  "mcp__airflow_dev_clear_task_instances": "write",
+  "mcp__airflow_dev_delete_dag_run": "write",
+  "mcp__airflow_dev_diagnose_dag_run": "read",
+  "mcp__airflow_dev_explore_dag": "read",
+  "mcp__airflow_dev_get_airflow_config": "read",
+  "mcp__airflow_dev_get_airflow_version": "read",
+  "mcp__airflow_dev_get_dag_details": "read",
+  "mcp__airflow_dev_get_dag_run": "read",
+  "mcp__airflow_dev_get_dag_source": "read",
+  "mcp__airflow_dev_get_dag_stats": "read",
+  "mcp__airflow_dev_get_pool": "read",
+  "mcp__airflow_dev_get_system_health": "read",
+  "mcp__airflow_dev_get_task": "read",
+  "mcp__airflow_dev_get_task_instance": "read",
+  "mcp__airflow_dev_get_task_logs": "read",
+  "mcp__airflow_dev_get_upstream_asset_events": "read",
+  "mcp__airflow_dev_get_variable": "read",
+  "mcp__airflow_dev_list_asset_events": "read",
+  "mcp__airflow_dev_list_assets": "read",
+  "mcp__airflow_dev_list_connections": "read",
+  "mcp__airflow_dev_list_dag_runs": "read",
+  "mcp__airflow_dev_list_dag_warnings": "read",
+  "mcp__airflow_dev_list_dags": "read",
+  "mcp__airflow_dev_list_import_errors": "read",
+  "mcp__airflow_dev_list_plugins": "read",
+  "mcp__airflow_dev_list_pools": "read",
+  "mcp__airflow_dev_list_providers": "read",
+  "mcp__airflow_dev_list_tasks": "read",
+  "mcp__airflow_dev_list_variables": "read",
+  "mcp__airflow_dev_pause_dag": "write",
+  "mcp__airflow_dev_trigger_dag": "write",
+  "mcp__airflow_dev_trigger_dag_and_wait": "write",
+  "mcp__airflow_dev_unpause_dag": "write",
+  "mcp__airflow_prd_clear_dag_run": "write",
+  "mcp__airflow_prd_clear_task_instances": "write",
+  "mcp__airflow_prd_delete_dag_run": "write",
+  "mcp__airflow_prd_diagnose_dag_run": "read",
+  "mcp__airflow_prd_explore_dag": "read",
+  "mcp__airflow_prd_get_airflow_config": "read",
+  "mcp__airflow_prd_get_airflow_version": "read",
+  "mcp__airflow_prd_get_dag_details": "read",
+  "mcp__airflow_prd_get_dag_run": "read",
+  "mcp__airflow_prd_get_dag_source": "read",
+  "mcp__airflow_prd_get_dag_stats": "read",
+  "mcp__airflow_prd_get_pool": "read",
+  "mcp__airflow_prd_get_system_health": "read",
+  "mcp__airflow_prd_get_task": "read",
+  "mcp__airflow_prd_get_task_instance": "read",
+  "mcp__airflow_prd_get_task_logs": "read",
+  "mcp__airflow_prd_get_upstream_asset_events": "read",
+  "mcp__airflow_prd_get_variable": "read",
+  "mcp__airflow_prd_list_asset_events": "read",
+  "mcp__airflow_prd_list_assets": "read",
+  "mcp__airflow_prd_list_connections": "read",
+  "mcp__airflow_prd_list_dag_runs": "read",
+  "mcp__airflow_prd_list_dag_warnings": "read",
+  "mcp__airflow_prd_list_dags": "read",
+  "mcp__airflow_prd_list_import_errors": "read",
+  "mcp__airflow_prd_list_plugins": "read",
+  "mcp__airflow_prd_list_pools": "read",
+  "mcp__airflow_prd_list_providers": "read",
+  "mcp__airflow_prd_list_tasks": "read",
+  "mcp__airflow_prd_list_variables": "read",
+  "mcp__airflow_prd_pause_dag": "write",
+  "mcp__airflow_prd_trigger_dag": "write",
+  "mcp__airflow_prd_trigger_dag_and_wait": "write",
+  "mcp__airflow_prd_unpause_dag": "write",
+  "mcp__airflow_tst_clear_dag_run": "write",
+  "mcp__airflow_tst_clear_task_instances": "write",
+  "mcp__airflow_tst_delete_dag_run": "write",
+  "mcp__airflow_tst_diagnose_dag_run": "read",
+  "mcp__airflow_tst_explore_dag": "read",
+  "mcp__airflow_tst_get_airflow_config": "read",
+  "mcp__airflow_tst_get_airflow_version": "read",
+  "mcp__airflow_tst_get_dag_details": "read",
+  "mcp__airflow_tst_get_dag_run": "read",
+  "mcp__airflow_tst_get_dag_source": "read",
+  "mcp__airflow_tst_get_dag_stats": "read",
+  "mcp__airflow_tst_get_pool": "read",
+  "mcp__airflow_tst_get_system_health": "read",
+  "mcp__airflow_tst_get_task": "read",
+  "mcp__airflow_tst_get_task_instance": "read",
+  "mcp__airflow_tst_get_task_logs": "read",
+  "mcp__airflow_tst_get_upstream_asset_events": "read",
+  "mcp__airflow_tst_get_variable": "read",
+  "mcp__airflow_tst_list_asset_events": "read",
+  "mcp__airflow_tst_list_assets": "read",
+  "mcp__airflow_tst_list_connections": "read",
+  "mcp__airflow_tst_list_dag_runs": "read",
+  "mcp__airflow_tst_list_dag_warnings": "read",
+  "mcp__airflow_tst_list_dags": "read",
+  "mcp__airflow_tst_list_import_errors": "read",
+  "mcp__airflow_tst_list_plugins": "read",
+  "mcp__airflow_tst_list_pools": "read",
+  "mcp__airflow_tst_list_providers": "read",
+  "mcp__airflow_tst_list_tasks": "read",
+  "mcp__airflow_tst_list_variables": "read",
+  "mcp__airflow_tst_pause_dag": "write",
+  "mcp__airflow_tst_trigger_dag": "write",
+  "mcp__airflow_tst_trigger_dag_and_wait": "write",
+  "mcp__airflow_tst_unpause_dag": "write",
+  "mcp__atlassian_addgraphcontext": {
+    "selector": "relationshipType",
+    "values": {
+      "jira-work-item-blocks-jira-work-item": "write",
+      "jira-work-item-contributes-to-atlassian-goal": "write",
+      "jira-work-item-links-jira-work-item": "write",
+      "jira-work-item-links-jira-work-item-remote-link": "write",
+      "jira-work-item-tracks-atlassian-project": "write"
+    }
+  },
+  "mcp__atlassian_addoreditjiraissuecomment": "write",
+  "mcp__atlassian_atlassianuserinfo": "read",
+  "mcp__atlassian_createconfluencecontent": "write",
+  "mcp__atlassian_createjiraissue": "write",
+  "mcp__atlassian_discover": "read",
+  "mcp__atlassian_editjiraissue": "write",
+  "mcp__atlassian_executedestructive": "write",
+  "mcp__atlassian_executeread": "read",
+  "mcp__atlassian_executewrite": "write",
+  "mcp__atlassian_getaccessibleatlassianresources": "read",
+  "mcp__atlassian_getconfluencecontent": "read",
+  "mcp__atlassian_getgraphcontext": {
+    "selector": "objectType",
+    "values": {
+      "AssetsObject": "read",
+      "AtlassianGoal": "read",
+      "AtlassianGoalUpdate": "read",
+      "AtlassianHomeComment": "read",
+      "AtlassianHomeTag": "read",
+      "AtlassianProject": "read",
+      "AtlassianProjectUpdate": "read",
+      "AtlassianTeam": "read",
+      "AtlassianUser": "read",
+      "CompassComponent": "read",
+      "ConfluenceBlogPost": "read",
+      "ConfluenceComment": "read",
+      "ConfluenceDatabase": "read",
+      "ConfluencePage": "read",
+      "ConfluenceSpace": "read",
+      "ConfluenceWhiteboard": "read",
+      "ExternalCalendarEvent": "read",
+      "ExternalConversation": "read",
+      "ExternalDeployment": "read",
+      "ExternalDesign": "read",
+      "ExternalDocument": "read",
+      "ExternalOrganisation": "read",
+      "ExternalPosition": "read",
+      "ExternalPullRequest": "read",
+      "ExternalRepository": "read",
+      "ExternalService": "read",
+      "FocusFocusArea": "read",
+      "JiraSpace": "read",
+      "JiraSprint": "read",
+      "JiraVersion": "read",
+      "JiraWorkItem": "read",
+      "JiraWorkItemComment": "read",
+      "LoomMeeting": "read",
+      "LoomMeetingRecurrence": "read",
+      "LoomVideo": "read"
+    }
+  },
+  "mcp__atlassian_getgraphobject": "read",
+  "mcp__atlassian_getjiraissue": "read",
+  "mcp__atlassian_getloomvideo": "read",
+  "mcp__atlassian_search": "read",
+  "mcp__atlassian_searchconfluence": "read",
+  "mcp__atlassian_searchjiraissuesusingjql": "read",
+  "mcp__atlassian_transitionjiraissue": "write",
+  "mcp__atlassian_updateconfluencecontent": "write",
+  "mcp__azure_devops_advsec_get_alert_details": "read",
+  "mcp__azure_devops_advsec_get_alerts": "read",
+  "mcp__azure_devops_core_get_identity_ids": "read",
+  "mcp__azure_devops_core_list_project_teams": "read",
+  "mcp__azure_devops_core_list_projects": "read",
+  "mcp__azure_devops_pipelines_artifact": {
+    "selector": "action",
+    "values": {
+      "download": "read",
+      "list": "read"
+    }
+  },
+  "mcp__azure_devops_pipelines_build": {
+    "selector": "action",
+    "values": {
+      "get_changes": "read",
+      "get_status": "read",
+      "list": "read"
+    }
+  },
+  "mcp__azure_devops_pipelines_build_log": {
+    "selector": "action",
+    "values": {
+      "get_content": "read",
+      "list": "read"
+    }
+  },
+  "mcp__azure_devops_pipelines_definition": {
+    "selector": "action",
+    "values": {
+      "list": "read",
+      "list_revisions": "read"
+    }
+  },
+  "mcp__azure_devops_pipelines_run": {
+    "selector": "action",
+    "values": {
+      "get": "read",
+      "list": "read"
+    }
+  },
+  "mcp__azure_devops_pipelines_write": {
+    "selector": "action",
+    "values": {
+      "create_pipeline": "write",
+      "rename_pipeline": "write",
+      "run_pipeline": "write",
+      "update_build_stage": "write"
+    }
+  },
+  "mcp__azure_devops_repo_branch": {
+    "selector": "action",
+    "values": {
+      "get": "read",
+      "list": "read",
+      "list_mine": "read"
+    }
+  },
+  "mcp__azure_devops_repo_create_branch": "write",
+  "mcp__azure_devops_repo_file": {
+    "selector": "action",
+    "values": {
+      "get_content": "read",
+      "list_directory": "read"
+    }
+  },
+  "mcp__azure_devops_repo_pull_request": {
+    "selector": "action",
+    "values": {
+      "get": "read",
+      "list": "read",
+      "list_by_commits": "read"
+    }
+  },
+  "mcp__azure_devops_repo_pull_request_thread": {
+    "selector": "action",
+    "values": {
+      "list": "read",
+      "list_comments": "read"
+    }
+  },
+  "mcp__azure_devops_repo_pull_request_thread_write": {
+    "selector": "action",
+    "values": {
+      "create": "write",
+      "reply": "write",
+      "update": "write",
+      "update_status": "write"
+    }
+  },
+  "mcp__azure_devops_repo_pull_request_write": {
+    "selector": "action",
+    "values": {
+      "create": "write",
+      "update": "write",
+      "update_reviewers": "write",
+      "vote": "write"
+    }
+  },
+  "mcp__azure_devops_repo_repository": {
+    "selector": "action",
+    "values": {
+      "get": "read",
+      "list": "read"
+    }
+  },
+  "mcp__azure_devops_repo_search_commits": "read",
+  "mcp__azure_devops_search_code": "read",
+  "mcp__azure_devops_search_wiki": "read",
+  "mcp__azure_devops_search_workitem": "read",
+  "mcp__azure_devops_testplan": {
+    "selector": "action",
+    "values": {
+      "list_cases": "read",
+      "list_plans": "read",
+      "list_suites": "read"
+    }
+  },
+  "mcp__azure_devops_testplan_show_test_results_from_build_id": "read",
+  "mcp__azure_devops_testplan_test_case_write": {
+    "selector": "action",
+    "values": {
+      "create": "write",
+      "update_steps": "write"
+    }
+  },
+  "mcp__azure_devops_testplan_test_plan_write": {
+    "selector": "action",
+    "values": {
+      "create": "write"
+    }
+  },
+  "mcp__azure_devops_testplan_test_suite_write": {
+    "selector": "action",
+    "values": {
+      "add_test_cases": "write",
+      "create": "write"
+    }
+  },
+  "mcp__azure_devops_wiki": {
+    "selector": "action",
+    "values": {
+      "get_page": "read",
+      "get_page_content": "read",
+      "get_wiki": "read",
+      "list_pages": "read",
+      "list_wikis": "read"
+    }
+  },
+  "mcp__azure_devops_wiki_upsert_page": "write",
+  "mcp__azure_devops_wit_backlog": {
+    "selector": "action",
+    "values": {
+      "list": "read",
+      "list_work_items": "read",
+      "reorder": "write"
+    }
+  },
+  "mcp__azure_devops_wit_query": {
+    "selector": "action",
+    "values": {
+      "get": "read",
+      "get_results": "read",
+      "wiql": "read"
+    }
+  },
+  "mcp__azure_devops_wit_work_item": {
+    "selector": "action",
+    "values": {
+      "get": "read",
+      "get_batch": "read",
+      "get_type": "read",
+      "list_comments": "read",
+      "list_for_iteration": "read",
+      "list_revisions": "read",
+      "my": "read"
+    }
+  },
+  "mcp__azure_devops_wit_work_item_attachment": "read",
+  "mcp__azure_devops_wit_work_item_comment_write": {
+    "selector": "action",
+    "values": {
+      "add": "write",
+      "update": "write"
+    }
+  },
+  "mcp__azure_devops_wit_work_item_link_write": {
+    "selector": "action",
+    "values": {
+      "add_artifact_link": "write",
+      "link": "write",
+      "link_to_pull_request": "write",
+      "unlink": "write"
+    }
+  },
+  "mcp__azure_devops_wit_work_item_write": {
+    "selector": "action",
+    "values": {
+      "add_child": "write",
+      "create": "write",
+      "update": "write",
+      "update_batch": "write"
+    }
+  },
+  "mcp__azure_devops_work": {
+    "selector": "action",
+    "values": {
+      "get_iteration_capacities": "read",
+      "get_team_capacity": "read",
+      "get_team_settings": "read",
+      "list_iterations": "read",
+      "list_team_iterations": "read"
+    }
+  },
+  "mcp__azure_devops_work_capacity_write": {
+    "selector": "action",
+    "values": {
+      "update": "write"
+    }
+  },
+  "mcp__azure_devops_work_iteration_write": {
+    "selector": "action",
+    "values": {
+      "assign": "write",
+      "create": "write"
+    }
+  },
+  "mcp__gfs_agentic_qa_compare_at_rest": {
+    "selector": "environment",
+    "values": {
+      "dev": "read",
+      "prd": "read",
+      "tst": "read"
+    }
+  }
+}

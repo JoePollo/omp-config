@@ -5,11 +5,12 @@ import { dirname, join, relative, resolve } from "node:path";
 import type { Exec } from "./session.ts";
 
 export type GateStep = {
-  group: "setup" | "python" | "terraform" | "sql" | "json" | "markdown" | "yaml";
+  group: "setup" | "python" | "typescript" | "terraform" | "sql" | "json" | "markdown" | "yaml";
   command: string;
   cwd: string;
   outcome: "pass" | "fail" | "superseded" | "skipped" | "unavailable" | "needs-config";
   detail: string;
+  durationMs: number;
 };
 
 export type GateReport = {
@@ -18,7 +19,9 @@ export type GateReport = {
   steps: GateStep[];
   blockers: Array<{ kind: "ci" | "config"; step: string; detail: string }>;
   findings: Array<{ step: string; detail: string }>;
+  environment: Array<{ step: string; detail: string }>;
   filesChangedByGate: string[];
+  durationMs: number;
 };
 
 type Group = Exclude<GateStep["group"], "setup">;
@@ -27,16 +30,20 @@ type FileGroups = Record<Group, string[]>;
 type GroupRunContext = { exec: Exec; root: string; signal: AbortSignal; steps: GateStep[]; blockers: GateReport["blockers"]; findings: GateReport["findings"] };
 type GroupRunner = (context: GroupRunContext, files: string[]) => Promise<void>;
 
-const GROUPS: Group[] = ["python", "terraform", "sql", "json", "markdown", "yaml"];
+const GROUPS: Group[] = ["python", "typescript", "terraform", "sql", "json", "markdown", "yaml"];
 const PROJECT_MARKERS = ["pyproject.toml", "databricks.yml", "databricks.yaml", "setup.cfg", "setup.py"];
 const GROUP_MATCHERS: Array<[Group, (name: string) => boolean]> = [
   ["python", (name) => /\.pyi?$|\.ipynb$/.test(name) || ["pyproject.toml", "uv.lock", "setup.cfg", "pytest.ini"].includes(name) || /^requirements.*\.txt$/.test(name)],
+  ["typescript", (name) => /\.(?:ts|tsx|mts|cts)$/.test(name)],
   ["terraform", (name) => /\.tf(?:vars)?$/.test(name)],
   ["sql", (name) => name.endsWith(".sql")],
   ["json", (name) => (name.endsWith(".json") || name.endsWith(".jsonc")) && !["package-lock.json", "npm-shrinkwrap.json"].includes(name)],
   ["markdown", (name) => name.endsWith(".md") || name.endsWith(".markdown")],
   ["yaml", (name) => name.endsWith(".yml") || name.endsWith(".yaml")],
 ];
+const UNAVAILABLE_OUTPUT = /Failed to spawn|not recognized as an internal or external command|No such file or directory|command not found|ENOENT/i;
+const TERRAFORM_PLATFORM = /does not have a package available for your current platform, (\w+)/;
+const TERRAFORM_REGISTRY_UNREACHABLE = /could not connect to registry|failed to request discovery document|no such host|i\/o timeout|TLS handshake timeout/i;
 
 function displayCommand(command: string, args: string[]): string {
   return [command, ...args].map((part) => /\s/.test(part) ? `"${part.replaceAll('"', '\\"')}"` : part).join(" ");
@@ -50,6 +57,13 @@ function outputDetail(output: string): string {
 }
 
 
+function stepOutcome(result: Awaited<ReturnType<Exec>>, output: string, signal: AbortSignal, timeout: number): Pick<GateStep, "outcome" | "detail"> {
+  if (result.killed) return { outcome: "fail", detail: signal.aborted ? "cancelled: the quality gate stopped" : `timed out after ${timeout / 1000} s` };
+  if (UNAVAILABLE_OUTPUT.test(output)) return { outcome: "unavailable", detail: outputDetail(output) || "command unavailable" };
+  if (result.code !== 0) return { outcome: "fail", detail: outputDetail(output) || `exited with code ${result.code}` };
+  return { outcome: "pass", detail: "" };
+}
+
 async function runStep(
   exec: Exec,
   signal: AbortSignal,
@@ -59,31 +73,22 @@ async function runStep(
   args: string[],
   timeout = 300_000,
 ): Promise<StepResult> {
-  const step: GateStep = { group, command: displayCommand(command, args), cwd, outcome: "pass", detail: "" };
+  const started = Date.now();
+  const base = { group, command: displayCommand(command, args), cwd };
   try {
     const result = await exec(command, args, { cwd, timeout, signal });
     const output = `${result.stderr}\n${result.stdout}`;
-    if (result.killed) {
-      step.outcome = "fail";
-      step.detail = "timed out or cancelled";
-    } else if (/Failed to spawn|not recognized as an internal or external command|No such file or directory|command not found|ENOENT/i.test(output)) {
-      step.outcome = "unavailable";
-      step.detail = outputDetail(output) || "command unavailable";
-    } else if (result.code !== 0) {
-      step.outcome = "fail";
-      step.detail = outputDetail(output) || `exited with code ${result.code}`;
-    }
+    const step: GateStep = { ...base, ...stepOutcome(result, output, signal, timeout), durationMs: Date.now() - started };
     return { step, output, stdout: result.stdout, code: result.code, killed: Boolean(result.killed) };
   } catch (error) {
-    step.outcome = "unavailable";
-    step.detail = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
-    return { step, output: step.detail, stdout: "", code: null, killed: false };
+    const detail = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+    return { step: { ...base, outcome: "unavailable", detail, durationMs: Date.now() - started }, output: detail, stdout: "", code: null, killed: false };
   }
 }
 
 
 function addToGroup(groups: FileGroups, path: string): void {
-  const name = path.split("/").at(-1)!.toLowerCase();
+  const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
   const group = GROUP_MATCHERS.find(([, matches]) => matches(name))?.[0];
   if (group) groups[group].push(path);
 }
@@ -152,16 +157,12 @@ async function fileHashes(root: string, paths: string[]): Promise<Map<string, st
   return hashes;
 }
 
-function hasDecidingFailure(step: GateStep): boolean {
-  return step.outcome === "fail" || step.outcome === "unavailable";
-}
-
 function addFinding(findings: GateReport["findings"], step: GateStep): void {
-  if (hasDecidingFailure(step)) findings.push({ step: step.command, detail: step.detail });
+  if (step.outcome === "fail") findings.push({ step: step.command, detail: step.detail });
 }
 
 function addPythonBlocker(blockers: GateReport["blockers"], step: GateStep): void {
-  if (hasDecidingFailure(step)) blockers.push({ kind: "ci", step: step.command, detail: step.detail });
+  if (step.outcome === "fail") blockers.push({ kind: "ci", step: step.command, detail: step.detail });
 }
 
 async function hasTests(projectDir: string): Promise<boolean> {
@@ -174,23 +175,30 @@ async function hasTests(projectDir: string): Promise<boolean> {
   return false;
 }
 
-async function hasProjectMarker(directory: string): Promise<boolean> {
-  for (const marker of PROJECT_MARKERS) {
+async function hasMarker(directory: string, markers: readonly string[]): Promise<boolean> {
+  for (const marker of markers) {
     if (await isFile(join(directory, marker))) return true;
   }
   return false;
 }
 
-async function projectDirectory(root: string, path: string): Promise<string> {
+async function markerDirectory(root: string, path: string, markers: readonly string[]): Promise<string | null> {
   const rootPath = resolve(root);
   let directory = resolve(rootPath, dirname(path));
-  while (true) {
-    if (await hasProjectMarker(directory)) return directory;
-    if (directory === rootPath) return rootPath;
-    const parent = dirname(directory);
-    if (parent === directory || relative(rootPath, directory).startsWith("..")) return rootPath;
-    directory = parent;
+  while (!relative(rootPath, directory).startsWith("..")) {
+    if (await hasMarker(directory, markers)) return directory;
+    if (directory === rootPath || directory === dirname(directory)) return null;
+    directory = dirname(directory);
   }
+  return null;
+}
+
+export async function projectDirectory(root: string, path: string): Promise<string> {
+  return (await markerDirectory(root, path, PROJECT_MARKERS)) ?? resolve(root);
+}
+
+export async function tsconfigDirectory(root: string, path: string): Promise<string | null> {
+  return markerDirectory(root, path, ["tsconfig.json"]);
 }
 
 async function pythonProjects(root: string, files: string[]): Promise<string[]> {
@@ -240,8 +248,57 @@ async function runPython(
       steps.push(tests.step);
       addPythonBlocker(blockers, tests.step);
     } else {
-      steps.push({ group: "python", command: "uv run pytest", cwd, outcome: "skipped", detail: "no tests found" });
+      steps.push({ group: "python", command: "uv run pytest", cwd, outcome: "skipped", detail: "no tests found", durationMs: 0 });
     }
+  }
+}
+
+async function runTypescript(
+  exec: Exec,
+  root: string,
+  files: string[],
+  signal: AbortSignal,
+  steps: GateStep[],
+  findings: GateReport["findings"],
+): Promise<void> {
+  await runFixableCheck(
+    exec,
+    signal,
+    "typescript",
+    root,
+    "biome",
+    ["lint", "--no-errors-on-unmatched", "--files-ignore-unknown=true", ...files],
+    ["lint", "--no-errors-on-unmatched", "--files-ignore-unknown=true", "--write", ...files],
+    steps,
+    findings,
+  );
+  const projects = new Set<string>();
+  let unchecked = 0;
+  for (const path of files) {
+    const directory = await tsconfigDirectory(root, path);
+    if (directory === null) unchecked++;
+    else projects.add(directory);
+  }
+  for (const cwd of [...projects].sort()) {
+    const result = await runStep(exec, signal, "typescript", cwd, "tsc", ["--noEmit", "--pretty", "false"]);
+    steps.push(result.step);
+    addFinding(findings, result.step);
+  }
+  if (unchecked > 0) {
+    steps.push({ group: "typescript", command: "tsc --noEmit --pretty false", cwd: root, outcome: "skipped", detail: `no tsconfig.json between ${unchecked} changed file(s) and the repo root`, durationMs: 0 });
+  }
+}
+
+function classifyTerraformInit(init: StepResult): void {
+  if (init.step.outcome !== "fail") return;
+  const output = init.output.replace(/\s+/g, " ");
+  const platform = TERRAFORM_PLATFORM.exec(output)?.[1];
+  if (platform !== undefined) {
+    init.step.outcome = "unavailable";
+    init.step.detail = `No provider package exists for ${platform}, the platform of the terraform CLI on PATH; a code edit cannot fix this. ${init.step.detail}`;
+  } else if (TERRAFORM_REGISTRY_UNREACHABLE.test(output)) {
+    init.step.outcome = "unavailable";
+    init.step.detail = `The Terraform registry is unreachable from this machine; a code edit cannot fix this. ${init.step.detail}`;
   }
 }
 
@@ -256,16 +313,21 @@ async function runTerraform(
   const version = await runStep(exec, signal, "terraform", root, "terraform", ["version"]);
   if (version.step.outcome !== "pass") {
     steps.push({ ...version.step, outcome: "unavailable", detail: "terraform is not on PATH; scoop install terraform" });
-    findings.push({ step: "terraform version", detail: "terraform is not on PATH; scoop install terraform" });
     return;
   }
   const configurationDirs = [...new Set(files.filter((path) => path.toLowerCase().endsWith(".tf")).map((path) => resolve(root, dirname(path))))].sort();
   for (const cwd of configurationDirs) {
-    for (const args of [["init", "-backend=false", "-input=false", "-no-color"], ["validate", "-no-color"]]) {
-      const result = await runStep(exec, signal, "terraform", cwd, "terraform", args);
-      steps.push(result.step);
-      addFinding(findings, result.step);
+    const init = await runStep(exec, signal, "terraform", cwd, "terraform", ["init", "-backend=false", "-input=false", "-no-color"]);
+    classifyTerraformInit(init);
+    steps.push(init.step);
+    addFinding(findings, init.step);
+    if (init.step.outcome !== "pass") {
+      steps.push({ group: "terraform", command: "terraform validate -no-color", cwd, outcome: "skipped", detail: "terraform init did not pass in this directory", durationMs: 0 });
+      continue;
     }
+    const validate = await runStep(exec, signal, "terraform", cwd, "terraform", ["validate", "-no-color"]);
+    steps.push(validate.step);
+    addFinding(findings, validate.step);
   }
   const formatDirs = [...new Set(files.map((path) => resolve(root, dirname(path))))].sort();
   for (const cwd of formatDirs) {
@@ -318,7 +380,7 @@ async function runSql(
   if (/No dialect was specified/i.test(format.output)) {
     const detail = `No SQLFluff dialect configured for: ${paths.join(", ")}. Needs a .sqlfluff with dialect = tsql, databricks, or snowflake.`;
     steps.push({ ...format.step, outcome: "needs-config", detail });
-    steps.push({ group: "sql", command: displayCommand("sqlfluff", ["lint", ...files]), cwd: root, outcome: "needs-config", detail });
+    steps.push({ group: "sql", command: displayCommand("sqlfluff", ["lint", ...files]), cwd: root, outcome: "needs-config", detail, durationMs: 0 });
     blockers.push({ kind: "config", step: "sqlfluff", detail });
     return;
   }
@@ -397,6 +459,7 @@ async function runYaml(
 
 const GROUP_RUNNERS: Record<Group, GroupRunner> = {
   python: ({ exec, root, signal, steps, blockers }, files) => runPython(exec, root, files, signal, steps, blockers),
+  typescript: ({ exec, root, signal, steps, findings }, files) => runTypescript(exec, root, files, signal, steps, findings),
   terraform: ({ exec, root, signal, steps, findings }, files) => runTerraform(exec, root, files, signal, steps, findings),
   sql: ({ exec, root, signal, steps, blockers, findings }, files) => runSql(exec, root, files, signal, steps, blockers, findings),
   json: ({ exec, root, signal, steps, findings }, files) => runJson(exec, root, files, signal, steps, findings),
@@ -406,16 +469,18 @@ const GROUP_RUNNERS: Record<Group, GroupRunner> = {
 
 function summaryFor(steps: GateStep[], groups: FileGroups): string {
   const clauses = GROUPS.filter((group) => groups[group].length > 0).map((group) => {
-    const failures = steps.filter((step) => step.group === group && ["fail", "unavailable", "needs-config"].includes(step.outcome)).length;
-    return failures === 0 ? `${group} ok` : `${group} ${failures} failing`;
+    const own = steps.filter((step) => step.group === group);
+    const failing = own.filter((step) => step.outcome === "fail" || step.outcome === "needs-config").length;
+    const environment = own.filter((step) => step.outcome === "unavailable").length;
+    const counts = [failing > 0 ? `${failing} failing` : "", environment > 0 ? `${environment} environment` : ""].filter(Boolean);
+    return `${group} ${counts.join(", ") || "ok"}`;
   });
   return clauses.join("; ");
 }
 
-function gateStatus(steps: GateStep[], blockers: GateReport["blockers"], findings: GateReport["findings"]): GateReport["status"] {
+function gateStatus(blockers: GateReport["blockers"], findings: GateReport["findings"], environment: GateReport["environment"]): GateReport["status"] {
   if (blockers.length > 0) return "blocked";
-  if (findings.length > 0 || steps.some(hasDecidingFailure)) return "findings";
-  return "pass";
+  return findings.length > 0 || environment.length > 0 ? "findings" : "pass";
 }
 
 async function filesChangedByGate(root: string, before: Map<string, string>): Promise<string[]> {
@@ -424,9 +489,10 @@ async function filesChangedByGate(root: string, before: Map<string, string>): Pr
 }
 
 export async function runGate(exec: Exec, root: string, planStartedAt: string, signal: AbortSignal): Promise<GateReport> {
+  const started = Date.now();
   const changed = await changedPaths(exec, root, planStartedAt, signal);
   const before = await fileHashes(root, changed.paths);
-  const groups: FileGroups = { python: [], terraform: [], sql: [], json: [], markdown: [], yaml: [] };
+  const groups: FileGroups = { python: [], typescript: [], terraform: [], sql: [], json: [], markdown: [], yaml: [] };
   for (const path of changed.paths) addToGroup(groups, path);
   const steps: GateStep[] = [...changed.setup];
   const blockers: GateReport["blockers"] = [];
@@ -438,18 +504,23 @@ export async function runGate(exec: Exec, root: string, planStartedAt: string, s
       steps,
       blockers,
       findings,
+      environment: [],
       filesChangedByGate: [],
+      durationMs: Date.now() - started,
     };
   }
   const context: GroupRunContext = { exec, root, signal, steps, blockers, findings };
   for (const group of GROUPS) if (groups[group].length > 0) await GROUP_RUNNERS[group](context, groups[group]);
+  const environment = steps.filter((step) => step.outcome === "unavailable" && step.group !== "setup").map((step) => ({ step: `${step.command} (${relative(root, step.cwd).replaceAll("\\", "/") || "."})`, detail: step.detail }));
   const changedByGate = await filesChangedByGate(root, before);
   return {
-    status: gateStatus(steps, blockers, findings),
+    status: gateStatus(blockers, findings, environment),
     summary: summaryFor(steps, groups),
     steps,
     blockers,
     findings,
+    environment,
     filesChangedByGate: changedByGate,
+    durationMs: Date.now() - started,
   };
 }

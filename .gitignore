@@ -19,4 +19,6 @@
 .env
 .env.*
 !.env.example
-/.omp/project-index.yaml
+/.omp/
+/mcp-catalog.json.tmp
+/cli-catalog.json.tmp

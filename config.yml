@@ -1,5 +1,5 @@
 modelRoles:
-  default: github-copilot/gpt-6-luna
+  default: github-copilot/gpt-6-luna:max
   smol: github-copilot/gpt-6-luna
   plan: github-copilot/claude-opus-5.5:max
   advisor: github-copilot/grok-4.7:medium
@@ -7,6 +7,7 @@ modelRoles:
 symbolPreset: nerd
 composer:
   shape: box
+  tokenRate: true
 theme:
   dark: dark-twilight
 setupVersion: 2
@@ -54,3 +55,6 @@ worktree:
   cleanSource: false
 dev:
   autoqaConsent: denied
+display:
+  cacheMissMarker: true
+  showTokenUsage: true

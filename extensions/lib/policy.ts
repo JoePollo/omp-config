@@ -1,6 +1,6 @@
-import { commandSegments } from "./shell.ts";
+import { SUPPRESSIONS_RELATIVE_PATH } from "./review-suppressions.ts";
 
-export type Category = "git-mutation" | "dependency-add" | "external-write" | "python-without-uv";
+export type Category = "git-mutation" | "dependency-add" | "external-write" | "python-without-uv" | "review-suppression";
 export type Verdict = { action: "confirm" | "block"; category: Category; detail: string };
 
 const PYTHON_PROGRAM = /^(?:python(?:\d+(?:\.\d+)?)?|py|pip\d*(?:\.\d+)?|pipx)$/;
@@ -33,35 +33,16 @@ const GIT_TAG_MUTATIONS = new Set(["-d", "--delete", "-a", "--annotate", "-s", "
 const GIT_TAG_LISTS = new Set(["-l", "--list"]);
 const GIT_CHECKOUT_READS = new Set(["--ours", "--theirs"]);
 const GIT_CONFIG_READS = new Set(["--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l"]);
-const READ_VERBS = new Set(["show", "list", "get", "query", "exists", "check", "download", "wait", "tail", "browse", "version", "logs", "ls", "cat", "export", "describe", "status", "summary", "validate", "me"]);
 const TERRAFORM_MUTATIONS = new Set(["apply", "destroy", "import", "plan", "refresh", "query", "taint", "untaint", "force-unlock", "output", "show", "console", "state"]);
 const TERRAFORM_SKIPS = new Set(["-help", "-version", "-v"]);
 const TERRAFORM_WORKSPACE_MUTATIONS = new Set(["new", "delete", "select", "list"]);
-const AZ_ROOT_READS = new Set(["login", "logout", "version", "help", "find", "config"]);
-const AZ_ACTION_READS = new Map([
-  ["account", new Set(["show", "list", "set", "get-access-token", "list-locations", "clear"])],
-  ["extension", new Set(["list", "show", "list-available"])],
-]);
 const AZ_REST_READS = new Set(["get", "head"]);
 const AZ_BODY_OPTIONS = new Set(["--body", "-b"]);
-const DATABRICKS_ROOT_READS = new Set(["auth", "configure", "version", "help", "completion"]);
-const DATABRICKS_ACTION_READS = new Map([
-  ["bundle", new Set(["validate", "summary", "generate", "init", "schema", "open"])],
-  ["api", new Set(["get", "head"])],
-]);
-const ASTRO_ROOT_READS = new Set(["dev", "run", "version", "login", "logout", "context", "completion", "help", "config"]);
-const ASTRO_DEPLOYMENT_READS = new Set(["list", "inspect", "logs"]);
-const ASTRO_WORKSPACE_READS = new Set(["list", "switch"]);
 const CURL_DATA_OPTIONS = new Set(["-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--json", "-F", "--form", "-T", "--upload-file"]);
 const WGET_WRITE_OPTIONS = new Set(["--post-data", "--post-file", "--body-data", "--body-file"]);
 const POWERSHELL_WEB_TOOLS = new Set(["invoke-restmethod", "irm", "invoke-webrequest", "iwr"]);
 const POWERSHELL_WRITE_OPTIONS = new Set(["-body", "-infile"]);
 const SQL_TOOLS = new Set(["sqlcmd", "invoke-sqlcmd", "bcp", "osql"]);
-const MCP_READ_ALLOWLIST = [
-  /^mcp__agent_sql_server_(?:list_connections|query_sql)$/,
-  /^mcp__airflow_(?:dev|tst|prd)_(?:diagnose_dag_run|explore_dag|get_[a-z0-9_]+|list_[a-z0-9_]+)$/,
-  /^mcp__atlassian_(?:atlassianuserinfo|discover|executeread|getaccessibleatlassianresources|getconfluencecontent|getgraphcontext|getgraphobject|getjiraissue|getloomvideo|search|searchconfluence|searchjiraissuesusingjql)$/,
-];
 const MANIFEST_BASENAME = /^(?:pyproject\.toml|requirements[^/]*\.(?:txt|in)|package\.json|packages\.txt|setup\.py|setup\.cfg|pipfile|environment\.ya?ml|uv\.lock)$/;
 
 function verdict(action: Verdict["action"], category: Category, detail: string): Verdict {
@@ -72,7 +53,7 @@ function dependencyDetail(line: string): Verdict {
   return verdict("confirm", "dependency-add", `New dependency (AGENTS.md: needs your explicit permission): ${line}`);
 }
 
-function externalDetail(line: string, suffix = ""): Verdict {
+export function externalDetail(line: string, suffix = ""): Verdict {
   return verdict("confirm", "external-write", `External-service write or live-state access (AGENTS.md: external services are read-only unless you explicitly permit): ${line}${suffix}`);
 }
 
@@ -159,20 +140,12 @@ function classifyGit(argv: string[], line: string): Verdict | null {
   return verdict("confirm", "git-mutation", `Git mutation (AGENTS.md: all git operations except pull and merge-conflict resolution need your approval): ${line}`);
 }
 
-function classifyCommandSegment(argv: string[], line: string): Verdict | null {
+export function classifyCommandSegment(argv: string[], line: string): Verdict | null {
   if (PYTHON_PROGRAM.test(argv[0])) return verdict("block", "python-without-uv", `Python runs only through uv (AGENTS.md): use \`uv run python …\`, \`uv run <tool>\`, or \`uvx <tool>\`; add dependencies with \`uv add\` (needs explicit permission). Blocked: ${line}`);
   const dependency = classifyDependency(argv, line);
   if (dependency) return dependency;
   if (argv[0] === "git") return classifyGit(argv, line);
   return classifyCloudCommand(argv, line) ?? classifyTransferCommand(argv, line) ?? classifyOtherExternalCommand(argv, line);
-}
-
-export function classifyCommand(command: string): Verdict | null {
-  for (const argv of commandSegments(command)) {
-    const result = classifyCommandSegment(argv, argv.join(" "));
-    if (result) return result;
-  }
-  return null;
 }
 
 function isTerraformMutation(argv: string[]): boolean {
@@ -182,20 +155,6 @@ function isTerraformMutation(argv: string[]): boolean {
   if (TERRAFORM_MUTATIONS.has(subcommand)) return true;
   if (subcommand === "workspace") return TERRAFORM_WORKSPACE_MUTATIONS.has(argv[subIndex + 1]);
   return subcommand === "init" && !argv.includes("-backend=false", subIndex + 1);
-}
-
-function pathEnd(argv: string[]): number {
-  let index = 1;
-  while (index < argv.length && !argv[index].startsWith("-")) index++;
-  return index;
-}
-
-function isReadVerb(token: string | undefined): boolean {
-  return token !== undefined && (READ_VERBS.has(token) || token.startsWith("list-") || token.startsWith("show-") || token.startsWith("get-"));
-}
-
-function isActionRead(action: string | undefined, subaction: string | undefined, allowed: Map<string, Set<string>>): boolean {
-  return allowed.get(action ?? "")?.has(subaction ?? "") ?? false;
 }
 
 function isOptionPresent(argv: string[], start: number, options: Set<string>): boolean {
@@ -217,29 +176,10 @@ function azRestIsRead(argv: string[]): boolean {
   return AZ_REST_READS.has(method.toLowerCase());
 }
 
-function azIsRead(argv: string[]): boolean {
-  const end = pathEnd(argv);
-  if (end === 1 || AZ_ROOT_READS.has(argv[1]) || isActionRead(argv[1], argv[2], AZ_ACTION_READS)) return true;
-  if (argv[1] === "rest" && azRestIsRead(argv)) return true;
-  return isReadVerb(argv[end - 1]);
-}
-
-function databricksIsRead(argv: string[]): boolean {
-  const end = pathEnd(argv);
-  return end === 1 || DATABRICKS_ROOT_READS.has(argv[1]) || isActionRead(argv[1], argv[2], DATABRICKS_ACTION_READS) || isReadVerb(argv[end - 1]);
-}
-
-function astroIsRead(argv: string[]): boolean {
-  if (ASTRO_ROOT_READS.has(argv[1])) return true;
-  if (argv[1] === "deployment") return ASTRO_DEPLOYMENT_READS.has(argv[2]);
-  return (argv[1] === "workspace" || argv[1] === "organization") && ASTRO_WORKSPACE_READS.has(argv[2]);
-}
 function classifyCloudCommand(argv: string[], line: string): Verdict | null {
-  if (argv[0] === "terraform") return isTerraformMutation(argv) ? externalDetail(line) : null;
-  if (argv[0] === "az") return azIsRead(argv) ? null : externalDetail(line);
-  if (argv[0] === "databricks") return databricksIsRead(argv) ? null : externalDetail(line);
-  if (argv[0] === "astro") return astroIsRead(argv) ? null : externalDetail(line);
-  return null;
+  const azRest = argv[0] === "az" && argv[1] === "rest";
+  const mutation = argv[0] === "terraform" ? isTerraformMutation(argv) : azRest && !azRestIsRead(argv);
+  return mutation ? externalDetail(line) : null;
 }
 
 function isReadMethod(method: string | undefined): boolean {
@@ -303,14 +243,12 @@ function classifyOtherExternalCommand(argv: string[], line: string): Verdict | n
   return null;
 }
 
-export function classifyMcpTool(name: string): Verdict | null {
-  for (const pattern of MCP_READ_ALLOWLIST) if (pattern.test(name)) return null;
-  return verdict("confirm", "external-write", `MCP call outside the read-only allowlist (AGENTS.md: external services are read-only unless you explicitly permit): ${name}`);
-}
-
-export function classifyManifest(path: string): Verdict | null {
-  const basename = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1).toLowerCase();
-  if (!MANIFEST_BASENAME.test(basename)) return null;
+export function classifyTarget(path: string): Verdict | null {
+  const normalized = path.replaceAll("\\", "/").toLowerCase();
+  if (normalized === SUPPRESSIONS_RELATIVE_PATH || normalized.endsWith(`/${SUPPRESSIONS_RELATIVE_PATH}`)) {
+    return verdict("confirm", "review-suppression", `Quality-gate suppression edit (the user elects which review findings go unremediated): ${path}`);
+  }
+  if (!MANIFEST_BASENAME.test(normalized.slice(normalized.lastIndexOf("/") + 1))) return null;
   return verdict("confirm", "dependency-add", `Dependency manifest edit (AGENTS.md: no new dependencies without explicit permission): ${path}`);
 }
 

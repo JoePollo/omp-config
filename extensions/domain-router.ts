@@ -8,7 +8,7 @@ import { commandSegments } from "./lib/shell.ts";
 import { isInternalUrl, mcpToolName, mutationTargets, stripReadSelector } from "./lib/tool-args.ts";
 import { loadKbSkills, type KbSkill } from "./lib/skills.ts";
 
-const KB_MESSAGE = "jpollock.domain-router.kb";
+const KB_MESSAGE = "domain-router.kb";
 const AGENT_DIR = join(import.meta.dir, "..");
 const SKILLS_DIR = join(AGENT_DIR, "skills");
 const CODE_EXTENSIONS = new Set(".py .pyi .ipynb .ts .tsx .js .jsx .mjs .cjs .sql .tf .tfvars .hcl .ps1 .psm1 .sh .bash .cs .go .rs .java .kt .scala .yml .yaml .json .toml".split(" "));
@@ -240,6 +240,12 @@ function mutationToolsActive(pi: ExtensionAPI): boolean {
   return pi.getActiveTools().some((tool) => tool === "edit" || tool === "write");
 }
 
+function knownKbKey(key: string, skills: KbSkill[]): boolean {
+  const [name, topic] = key.split("/");
+  const skill = skills.find((item) => item.name === name);
+  return skill !== undefined && (topic === undefined || skill.topics.some((item) => item.file === topic));
+}
+
 function requestedKbKeys(
   prompt: unknown,
   skills: KbSkill[],
@@ -247,11 +253,11 @@ function requestedKbKeys(
   notify: (message: string, level?: "info" | "warning" | "error") => void,
 ): string[] {
   if (typeof prompt !== "string") return [];
-  const request = prompt.match(/\bkb: ([a-z0-9-]+(?:, ?[a-z0-9-]+)*)\./);
+  const request = prompt.match(/\bkb: ([a-z0-9-]+(?:\/[a-z0-9-]+\.md)?(?:, ?[a-z0-9-]+(?:\/[a-z0-9-]+\.md)?)*)\./);
   if (!request) return [];
   const keys: string[] = [];
   for (const name of request[1].split(/, ?/)) {
-    if (!skills.some((skill) => skill.name === name)) notify(`domain-router: unknown kb ${name}`, "warning");
+    if (!knownKbKey(name, skills)) notify(`domain-router: unknown kb ${name}`, "warning");
     else if (!delivered.has(name)) keys.push(name);
   }
   return keys;

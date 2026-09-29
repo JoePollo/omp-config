@@ -1,13 +1,15 @@
 # Terraform KB sources
-Verified 2026-09-25: web sources fetched and repo files read that day. Re-verify § Snapshot on Terraform CLI or provider upgrades.
+
+Verified 2026-09-25: web sources fetched and repo files read that day. Re-verify
+§ Snapshot on Terraform CLI or provider upgrades.
 
 | tag | source |
 |---|---|
 | `U` | user decision or house convention observed in the four repos, 2026-09-25 |
-| `AAR:<path>` | `C:/Users/jpollock/src/astro-admin-rbac/<path>` |
-| `ATP:<path>` | `C:/Users/jpollock/src/astro-tf-platform/<path>` |
-| `DAR:<path>` | `C:/Users/jpollock/src/data-admin-rbac/<path>` |
-| `DIAC:<path>` | `C:/Users/jpollock/src/Databricks-IaC/<path>` |
+| `AAR:<path>` | `~/src/astro-admin-rbac/<path>` |
+| `ATP:<path>` | `~/src/astro-tf-platform/<path>` |
+| `DAR:<path>` | `~/src/data-admin-rbac/<path>` |
+| `DIAC:<path>` | `~/src/Databricks-IaC/<path>` |
 | `HC:<path>` | `https://developer.hashicorp.com/terraform/<path>` |
 | `TFR:<x.y>` | `https://raw.githubusercontent.com/hashicorp/terraform/v<x.y>/CHANGELOG.md` |
 | `HAS:<skill>` | `https://raw.githubusercontent.com/hashicorp/agent-skills/main/plugins/terraform/skills/<skill>/SKILL.md` |
@@ -32,19 +34,43 @@ Verified 2026-09-25: web sources fetched and repo files read that day. Re-verify
 | `REG:<ns>/<name>` | `https://registry.terraform.io/v1/providers/<ns>/<name>` |
 
 ## Snapshot
-- Terraform CLI 1.16.4 latest (2026-09-23), 1.17.0 in beta; local CLI 1.16.4 (`windows_386`); the 1.x compatibility promises cover the language and protected workflows.
-- Registry latest (2026-09-10..24): azurerm 5.7.0, azuread 3.10.0, azapi 2.12.0, databricks 1.134.0, astro 1.5.3, random 3.9.1, time 0.14.2.
-- House pins: Terraform `= 1.15.4`, `>= 1.5.0`, `>= 1.9.0`; azurerm `= 4.73.0`, `~> 4.0` (locked 4.77.0, 4.81.0), `~> 4.0.0` (locked 4.0.1); azuread `= 3.8.0`, `~> 3.8.0`; databricks `= 1.129.0`, `~> 1.0` (locked 1.118.0); astro `= 1.2.3`.
-- Not installed locally: tflint, trivy, checkov, terraform-docs, tofu, terraform-ls.
-- HashiCorp publishes agent skills (MPL-2.0; e.g. terraform-style-guide, refactor-module, terraform-test, terraform-search-import) and a Terraform MCP server for registry and provider-doc lookup; neither is installed here.
+
+- Terraform CLI 1.16.4 latest (2026-09-23), 1.17.0 in beta; local CLI 1.16.4
+  (`windows_386`); the 1.x compatibility promises cover the language and
+  protected workflows.
+- Registry latest (2026-09-10..24): azurerm 5.7.0, azuread 3.10.0, azapi 2.12.0,
+  databricks 1.134.0, astro 1.5.3, random 3.9.1, time 0.14.2.
+- House pins: Terraform `= 1.15.4`, `>= 1.5.0`, `>= 1.9.0`; azurerm `= 4.73.0`,
+  `~> 4.0` (locked 4.77.0, 4.81.0), `~> 4.0.0` (locked 4.0.1); azuread
+  `= 3.8.0`, `~> 3.8.0`; databricks `= 1.129.0`, `~> 1.0` (locked 1.118.0);
+  astro `= 1.2.3`.
+- Not installed locally: tflint, trivy, checkov, terraform-docs, tofu,
+  terraform-ls.
+- HashiCorp publishes agent skills (MPL-2.0; e.g. terraform-style-guide,
+  refactor-module, terraform-test, terraform-search-import) and a Terraform MCP
+  server for registry and provider-doc lookup; neither is installed here.
 
 ## Conflicts resolved
-- Version constraints: HashiCorp and Google (root `~>`, module `>=` minimums) vs the user's choice: exact pins everywhere for new constraints; existing repo constraints unchanged (U).
-- Environments: HashiCorp and Google recommend a directory per environment; the house runs one root with per-environment tfvars and state keys, so the house pattern wins (U); CLI workspaces are rejected by both.
-- `count` vs `for_each`: HashiCorp allows `count` for near-identical instances and its agent skill prefers `for_each` everywhere; AVM and the house use `for_each` over stable keys for collections and `count` only for toggles, which this KB adopts.
-- Variable typing: Babenko prefers simple types, Gruntwork and AVM concrete `object` types; concrete types win (house manifests use `map(object(...))`).
-- Dynamic blocks: HashiCorp says sparingly, AVM uses them for optional nested blocks; both hold: only for optional or input-driven blocks.
-- Databricks auth: provider docs prefer OAuth/federation while Microsoft Learn lists service-principal PATs; federation wins, no PATs.
-- Backend auth: the Microsoft Learn state tutorial uses access keys, HashiCorp marks keys not recommended; Entra ID auth only.
-- Provisioners: HashiCorp permits them after exhausting alternatives; this KB avoids them and uses `terraform_data` for lifecycle containers.
-- AVM mandates AzAPI for new AVM modules; that policy is AVM-specific, so this KB keeps azurerm first.
+
+- Version constraints: HashiCorp and Google (root `~>`, module `>=` minimums) vs
+  the user's choice: exact pins everywhere for new constraints; existing repo
+  constraints unchanged (U).
+- Environments: HashiCorp and Google recommend a directory per environment; the
+  house runs one root with per-environment tfvars and state keys, so the house
+  pattern wins (U); CLI workspaces are rejected by both.
+- `count` vs `for_each`: HashiCorp allows `count` for near-identical instances
+  and its agent skill prefers `for_each` everywhere; AVM and the house use
+  `for_each` over stable keys for collections and `count` only for toggles,
+  which this KB adopts.
+- Variable typing: Babenko prefers simple types, Gruntwork and AVM concrete
+  `object` types; concrete types win (house manifests use `map(object(...))`).
+- Dynamic blocks: HashiCorp says sparingly, AVM uses them for optional nested
+  blocks; both hold: only for optional or input-driven blocks.
+- Databricks auth: provider docs prefer OAuth/federation while Microsoft Learn
+  lists service-principal PATs; federation wins, no PATs.
+- Backend auth: the Microsoft Learn state tutorial uses access keys, HashiCorp
+  marks keys not recommended; Entra ID auth only.
+- Provisioners: HashiCorp permits them after exhausting alternatives; this KB
+  avoids them and uses `terraform_data` for lifecycle containers.
+- AVM mandates AzAPI for new AVM modules; that policy is AVM-specific, so this
+  KB keeps azurerm first.

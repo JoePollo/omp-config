@@ -1,4 +1,4 @@
-import { classifyManifest } from "./policy.ts";
+import { classifyTarget } from "./policy.ts";
 import { mcpToolName, mutationTargets, recordInput } from "./tool-args.ts";
 
 const MAX_PAYLOAD_LINES = 40;
@@ -9,7 +9,7 @@ export function approvalMessage(detail: string, toolName: string, input: Record<
   const lines = intent ? [`Intent: ${intent}`, `Reason: ${detail}`] : [`Reason: ${detail}`];
   if (toolName === "bash" && typeof input.command === "string") lines.push(...block("Command:", input.command.split(LINE_BREAK)));
   else if (mcpToolName(toolName, input) !== null) lines.push(...block("Arguments:", mcpArgumentLines(toolName, input), MAX_PAYLOAD_LINES));
-  else lines.push(...manifestChangeLines(toolName, input));
+  else lines.push(...targetChangeLines(toolName, input));
   return lines.join("\n");
 }
 
@@ -34,10 +34,10 @@ function argumentLines(args: Record<string, unknown>): string[] {
   return lines;
 }
 
-function manifestChangeLines(toolName: string, input: Record<string, unknown>): string[] {
+function targetChangeLines(toolName: string, input: Record<string, unknown>): string[] {
   const targets = mutationTargets(toolName, input);
-  const manifest = targets.find((target) => classifyManifest(target.path) !== null);
-  const change = manifest ? manifest.content.replace(EDGE_LINE_BREAKS, "") : "";
+  const classified = targets.find((target) => classifyTarget(target.path) !== null);
+  const change = classified ? classified.content.replace(EDGE_LINE_BREAKS, "") : "";
   return change ? block("Change:", change.split(LINE_BREAK), MAX_PAYLOAD_LINES) : [];
 }
 
