@@ -1,6 +1,6 @@
 ---
 name: dagster
-description: Dagster 1.13 knowledge base (dg projects and components, assets, resources and environments, automation and partitions, testing and asset checks, Dagster+ Hybrid and OSS deployment on AKS, Databricks orchestration). Routed by rule://domain-router.
+description: Dagster 1.13 knowledge base (dg projects and components, assets, resources and environments, automation and partitions, testing and asset checks, self-hosted AWS deployment; Dagster mode and AWS services follow repository configuration). Routed by rule://domain-router.
 hide: true
 kb:
   files: ['**/dg.toml', '**/dagster.yaml', '**/dagster_cloud.yaml']
@@ -49,7 +49,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; sk
 | `ConfigurableResource`, `dg.EnvVar`, secrets, `.env`, `dg.Config` run config, dev/tst/prd selection, Azure Storage, SQL Server, Microsoft Teams | skill://dagster/resources.md |
 | schedules, sensors, `AutomationCondition`, declarative automation, partitions, partition mappings, backfills, concurrency pools, run queue limits, retries, timeouts, run monitoring | skill://dagster/automation.md |
 | `tests/`, unit tests, `materialize`, `dg check`, asset checks, freshness policies, logging, compute logs, PII, alerts | skill://dagster/testing.md |
-| Dagster+ Hybrid or Serverless, branch or full deployments, AKS agent, `build.yaml`, `container_context.yaml`, `dagster_cloud.yaml`, OSS Helm charts, `dagster.yaml`, run launchers, Postgres storage, images, CI/CD, Dagster upgrades | skill://dagster/deploy.md |
+| self-hosted AWS deployment, Dagster+ Hybrid or Serverless when configured, branch or full deployments, AKS reference, `build.yaml`, `container_context.yaml`, `dagster_cloud.yaml`, OSS Helm charts, `dagster.yaml`, run launchers, Postgres storage, images, CI/CD, Dagster upgrades | skill://dagster/deploy.md |
 | Databricks jobs, pipelines, SQL, bundle, Pipes, Databricks Connect, Databricks components, `dagster-databricks`, Databricks SDK | skill://dagster/databricks.md |
 | exact API signatures, `dg` flags and `--json` output, component YAML schemas, automation condition operands and operators, asset selection syntax, integration library catalog | skill://dagster-expert (its SKILL.md Reference Index, then the matching `references/` file) |
 
@@ -62,11 +62,12 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; sk
 - Definitions load without I/O: no API, database, HTTP, or Spark calls at module level or while building definitions; external metadata comes from state-backed components refreshed in CI. [DG:api/dagster/definitions, DG:guides/build/components/state-backed-components]
 - External systems are reached only through `dg.ConfigurableResource`s; secrets arrive via `dg.EnvVar`, never literals or load-time `os.getenv`. [DG:guides/build/external-resources/defining-resources, DG:guides/operate/configuration/using-environment-variables-and-secrets]
 - One codebase for dev/tst/prd: environment names, hosts, and IDs come from the deployment's environment variables; no environment literals in code or YAML. [U, DG:examples/full-pipelines/dagster-plus-deployment/define-assets]
+- The Dagster implementation is self-hosted on AWS; its Dagster mode and AWS compute, storage, identity, and secret services are unspecified. Inspect the project's deployment configuration; never infer these details. [U]
 - Automation: declarative automation for dependency-aware refresh, schedules for fixed-time jobs, sensors for external events and side effects; the automation condition sensor starts stopped. [DG:guides/automate, DG:guides/automate/declarative-automation/automation-condition-sensors]
 - Writes are idempotent per partition or run: overwrite or MERGE the target slice, never blind appends; retries and backfills replay them. [DG:guides/build/partitions-and-backfills/backfilling-data, DG:examples/best-practices/partition-backfill-strategies]
 - Dagster orchestrates, Databricks computes: the `data_platform` bundle owns Databricks jobs, pipelines, and compute; Dagster triggers deployed jobs. [U, DG:integrations/libraries/databricks]
 - Preview APIs can break in patch releases and beta APIs in minors: preview stays out of production code without explicit approval. [DG:about/releases, DG:api/api-lifecycle]
-- Deployed Dagster (Dagster+ or OSS), Databricks, Azure, and SQL Server are read-only for agents: no materializations, launches, re-executions, backfills, deploys, or secret, state, or setting changes without explicit permission (§Diagnose). [U]
+- Deployed Dagster (self-hosted on AWS), Databricks, Azure, and SQL Server are read-only for agents: no materializations, launches, re-executions, backfills, deploys, or secret, state, or setting changes without explicit permission (§Diagnose). [U]
 - Python style: skill://python; tests with `uv run pytest`. [U]
 
 ## Diagnose (read-only)
@@ -76,7 +77,7 @@ Defaults only: explicit instructions, AGENTS.md, repo config/conventions win; sk
 | definitions load; YAML and TOML valid | `uv run dg check defs [--verbose]`; `uv run dg check yaml`; `uv run dg check toml` |
 | what is defined | `uv run dg list defs --json [--assets <selection>] [--columns <names>]` (`key`, `group`, `deps`, `kinds`, `tags`, `cron`); `uv run dg list components --json`; `uv run dg list envs` |
 | component schema | `uv run dg utils inspect-component <ComponentType> --defs-yaml-schema` |
-| deployed runs, assets, schedules, sensors (Dagster+) | read-only `dg api` `list`/`get`/`get-*` subcommands per skill://dagster-expert/references/cli/api/INDEX.md; never print secret values |
-| deployed runs (OSS) | Dagster UI run, asset, and automation pages, view only |
+| deployed runs, assets, schedules, sensors (Dagster+; only if configured) | read-only `dg api` `list`/`get`/`get-*` subcommands per skill://dagster-expert/references/cli/api/INDEX.md; never print secret values |
+| deployed runs (self-hosted OSS on AWS, if configured) | Dagster UI run, asset, and automation pages, view only |
 
 Never without explicit permission: `dg launch`, runs or backfills started from `dg dev` or the UI, `dg api run launch` and rerun or terminate, `dg api` alert-policy, artifact, code-location, deployment, or organization writes, Dagster+ MCP write tools, `dg plus deploy`, `dg plus create env`, `dg plus pull env`, `dg utils refresh-defs-state`, `dg plus deploy refresh-defs-state`, `helm install`/`helm upgrade`. [U, SK:references/cli/launch.md, SK:references/cli/api/INDEX.md, SK:references/cli/plus/INDEX.md, SK:references/cli/utils/refresh-defs-state.md]

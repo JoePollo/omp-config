@@ -18,7 +18,8 @@ Tags → skill://dagster/sources.md.
 - No passwords, tokens, keys, or connection strings in code, YAML, run config, tags, metadata, or logs. [DG:guides/operate/configuration/using-environment-variables-and-secrets, U]
 - Local values: a project-root `.env` (loaded by `dg`) that is never committed, plus a committed `.env.example` naming the required variables; `dg list envs` shows what components need. [SK:references/env-vars.md, DG:api/clis/dg-cli/dg-cli-reference]
 - Dagster+: variables set in the UI, scoped per deployment and code location (UI values beat agent config), or per code location in `container_context.yaml`; built-ins `DAGSTER_CLOUD_DEPLOYMENT_NAME`, `DAGSTER_CLOUD_IS_BRANCH_DEPLOYMENT` (`"1"`). [DG:deployment/dagster-plus/management/environment-variables, DG:deployment/dagster-plus/management/environment-variables/agent-config, DG:deployment/dagster-plus/management/environment-variables/built-in]
-- AKS: secrets come from Key Vault through the Secrets Store CSI provider with workload identity (`Key Vault Secrets User`). [DG:deployment/dagster-plus/hybrid/azure/key-vault]
+- Self-hosted AWS: the runtime is in AWS, but the secret-delivery service is unspecified; follow the deployment config rather than assuming a provider-specific mechanism. [U]
+- AKS reference: secrets come from Key Vault through the Secrets Store CSI provider with workload identity (`Key Vault Secrets User`). [DG:deployment/dagster-plus/hybrid/azure/key-vault]
 
 ## Environments (dev/tst/prd)
 

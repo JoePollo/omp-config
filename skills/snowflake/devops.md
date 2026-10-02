@@ -20,7 +20,7 @@ Tags → skill://snowflake/sources.md. Auth objects (users, keys, PATs, policies
 ## Identifiers and drivers
 
 - `account = "<orgname>-<accountname>"`; no locators, no `.snowflakecomputing.com` suffix; account/user/role/warehouse/database from per-env config. [UG:admin-account-identifier, DEV:python-connector/python-connector-connect, U]
-- Python: `snowflake.connector.connect(connection_name=...)`. Unattended auth: `authenticator="WORKLOAD_IDENTITY"` + `workload_identity_provider="AZURE"` or `"OIDC"` (+ `token`), connector 3.17.0+; else `SNOWFLAKE_JWT` + `private_key_file`, or `PROGRAMMATIC_ACCESS_TOKEN`. [DEV:python-connector/python-connector-connect, UG:workload-identity-federation]
+- Python: `snowflake.connector.connect(connection_name=...)`. Unattended auth: `authenticator="WORKLOAD_IDENTITY"` + `workload_identity_provider="AWS"` for AWS IAM runtimes, `"AZURE"` for Azure managed identities, or `"OIDC"` + `token`; connector 3.17.0+; else `SNOWFLAKE_JWT` + `private_key_file`, or `PROGRAMMATIC_ACCESS_TOKEN`. [DEV:python-connector/python-connector-connect, UG:workload-identity-federation]
 - Tag work: `session_parameters={"QUERY_TAG": ...}` (≤2000 chars) → `ACCOUNT_USAGE.QUERY_HISTORY.query_tag`. [DEV:python-connector/python-connector-connect, SQL:parameters, SQL:account-usage/query_history]
 - Bind values, never f-strings/`format()`: default `pyformat` (`%s`, client-side); `paramstyle="qmark"` binds server-side and speeds `executemany`, but can't bind IN lists. [DEV:python-connector/python-connector-example]
 - Stay on connector 4.x: 5.x (Universal Core) is a Preview RC; Snowpark, CLI, `snowflake-ml-python` require <5. [DEV:python-connector/python-connector-universal-core]

@@ -31,8 +31,8 @@ Tags → skill://snowflake/sources.md. Data policies and sharing: skill://snowfl
 
 ## Services
 
-- WIF (preferred for services): `CREATE USER u TYPE = SERVICE WORKLOAD_IDENTITY = (TYPE = AZURE ISSUER = 'https://login.microsoftonline.com/<tenant_id>/v2.0' SUBJECT = '<managed_identity_object_id>')`; connect with `authenticator='WORKLOAD_IDENTITY'`, `workload_identity_provider='AZURE'` (Python connector >= 3.17.0). [SF:guides-overview-secure, UG:workload-identity-federation]
-- Azure WIF: tenant admin consents to the Snowflake EntraID app; user-assigned identities need `MANAGED_IDENTITY_CLIENT_ID`; no impersonation; pin tenants with `WORKLOAD_IDENTITY_POLICY = (ALLOWED_AZURE_ISSUERS = (...))`. [UG:workload-identity-federation, SQL:sql/create-authentication-policy]
+- WIF (preferred for services) follows the runtime identity provider: AWS IAM uses `CREATE USER u WORKLOAD_IDENTITY = (TYPE = AWS ARN = '<iam_role_arn>') TYPE = SERVICE`; connect with `authenticator='WORKLOAD_IDENTITY'`, `workload_identity_provider='AWS'` (Python connector >= 3.17.0). [SF:guides-overview-secure, UG:workload-identity-federation]
+- Azure WIF applies when the runtime uses an Azure managed identity: tenant admin consents to the Snowflake EntraID app; user-assigned identities need `MANAGED_IDENTITY_CLIENT_ID`; no impersonation; pin tenants with `WORKLOAD_IDENTITY_POLICY = (ALLOWED_AZURE_ISSUERS = (...))`. [UG:workload-identity-federation, SQL:sql/create-authentication-policy]
 - Key pair otherwise: RSA >= 2048-bit, encrypted PKCS#8, Python `authenticator='SNOWFLAKE_JWT'`; `ALTER USER u ADD KEY PAIR k PUBLIC_KEY = '...' ROLE_RESTRICTION = 'r' DAYS_TO_EXPIRY = 90` (max 10); `ROTATE KEY PAIR` keeps the old key 24 h; RSA_PUBLIC_KEY_2 swap is legacy. [UG:key-pair-auth, SQL:sql/alter-user-add-key-pair, DEV:python-connector/python-connector-connect]
 - External OAuth: `EXTERNAL_OAUTH_TYPE = AZURE`; ACCOUNTADMIN, SECURITYADMIN, ORGADMIN, GLOBALORGADMIN blocked by default; tokens need a role scope; drivers pass `authenticator='oauth'` + `token`. [UG:oauth-ext-overview, UG:oauth-azure]
 - PAT: user must be under a network policy (SERVICE: to generate and use; PERSON: to use); service tokens need ROLE_RESTRICTION by default and ignore secondary roles; expiry default 15, max 365 days. [UG:programmatic-access-tokens]
@@ -46,9 +46,9 @@ Tags → skill://snowflake/sources.md. Data policies and sharing: skill://snowfl
 
 ## Network
 
-- Network policies reference schema-level network rules (`MODE = INGRESS`, `TYPE = IPV4 | AZURELINKID`), not ALLOWED_IP_LIST; rules can't guard Azure internal stages. [UG:network-policies, UG:network-rules]
+- For AWS-hosted accounts, network policies use schema-level network rules (`MODE = INGRESS`, `TYPE = IPV4 | AWSVPCEID`); AWS internal-stage restrictions require `MODE = INTERNAL_STAGE` with `AWSVPCEID` and `ENFORCE_NETWORK_RULES_FOR_INTERNAL_STAGES = TRUE`. [UG:network-policies, UG:network-rules, SQL:parameters]
 - Allowed lists block other identifiers of their type; blocked wins on overlap; precedence integration > user > account; one policy per account or user; account activation fails unless your IP is allowed. [UG:network-policies]
-- Azure Private Link (Business Critical+): SYSTEM$GET_PRIVATELINK_CONFIG, SYSTEM$AUTHORIZE_PRIVATELINK, DNS, then SYSTEM$ENFORCE_PRIVATELINK_ACCESS_ONLY. [UG:privatelink-azure, UG:security-disable-public-access-privatelink]
+- AWS PrivateLink (Business Critical+): authorize with `SYSTEM$AUTHORIZE_PRIVATELINK`, configure the VPC endpoint and DNS using `SYSTEM$GET_PRIVATELINK_CONFIG`, then enforce private-only access with `SYSTEM$ENFORCE_PRIVATELINK_ACCESS_ONLY`. [UG:admin-security-privatelink, UG:security-disable-public-access-privatelink]
 
 ## External access
 
@@ -62,4 +62,4 @@ Tags → skill://snowflake/sources.md. Data policies and sharing: skill://snowfl
 ## Environment
 
 - Role, user, integration, and policy names come from per-environment config (dev, tst, prd); diagnostics stay read-only. [U]
-- Azure DevOps CI and Airflow: WIF where the runtime has an Azure managed identity, else a named key pair with ROLE_RESTRICTION and DAYS_TO_EXPIRY. [U, UG:workload-identity-federation]
+- Azure DevOps CI uses the OIDC setup in `devops.md`; Airflow uses WIF for the runtime identity provider (AWS IAM or Azure managed identity), else named key pairs with `ROLE_RESTRICTION` and `DAYS_TO_EXPIRY`. [U, UG:workload-identity-federation]

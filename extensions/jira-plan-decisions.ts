@@ -1,12 +1,11 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { findPlanMarker, latestMode, textOf, type BranchEntry } from "./lib/session.ts";
-import { mcpToolName, recordInput } from "./lib/tool-args.ts";
+import { JIRA_COMMENT_TOOL, mcpToolName, recordInput } from "./lib/tool-args.ts";
 
 const STORY_ENTRY = "jira-plan-decisions.story";
 const PENDING_ENTRY = "jira-plan-decisions.pending";
 const OUTCOME_ENTRY = "jira-plan-decisions.outcome";
 const REQUEST_MESSAGE = "jira-plan-decisions.request";
-const COMMENT_TOOL = "mcp__atlassian_addoreditjiraissuecomment";
 const JIRA_CLOUD_ID = "312bcfb3-bcfa-4a50-8288-79546cce4310";
 const STAGED_BODY = "@staged";
 const STORY_PROMPT = "Jira story for this plan's decisions";
@@ -149,7 +148,7 @@ function postInstruction(key: string): string {
   const payload = JSON.stringify({ cloudId: JIRA_CLOUD_ID, issueIdOrKey: key, commentBody: STAGED_BODY, contentFormat: "markdown" });
   return [
     `Post the staged plan-decisions comment to Jira story ${key} now, before any other step. The user enabled these posts and confirms each one in a dialog.`,
-    `Write this exact JSON to \`xd://${COMMENT_TOOL}\` (or pass it as the arguments of \`${COMMENT_TOOL}\` when that tool is listed directly):`,
+    `Write this exact JSON to \`xd://${JIRA_COMMENT_TOOL}\` (or pass it as the arguments of \`${JIRA_COMMENT_TOOL}\` when that tool is listed directly):`,
     payload,
     `The extension replaces "${STAGED_BODY}" with the staged comment. If the post is declined or fails, say so in one line and continue; do not retry.`,
   ].join("\n");
@@ -178,7 +177,7 @@ function openPost(branch: readonly BranchEntry[]): OpenPost | null {
 }
 
 function commentArgs(toolName: string, input: Record<string, unknown>): Record<string, unknown> | null {
-  if (mcpToolName(toolName, input) !== COMMENT_TOOL) return null;
+  if (mcpToolName(toolName, input) !== JIRA_COMMENT_TOOL) return null;
   let args = input;
   if (toolName === "write") {
     try {

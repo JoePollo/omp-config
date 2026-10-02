@@ -20,26 +20,36 @@ Tags → skill://snowflake/sources.md. Post-landing transforms (streams, tasks, 
 - Target 100–250 MB compressed files; parallelism ≤ file count; avoid ≥ 100 GB files; loads over 24 h can abort with nothing committed. [UG:data-load-considerations-prepare]
 - Snowpipe queue overhead scales with file count: aggregate small files, stage about once per minute. [UG:data-load-considerations-prepare, UG:data-load-snowpipe-intro]
 - JSON: `STRIP_NULL_VALUES = TRUE` when null means missing; one type per element keeps subcolumnarization. [UG:data-load-considerations-prepare, UG:data-load-considerations-load]
-- Reuse named `FILE FORMAT` objects in stages, COPY, and `INFER_SCHEMA` (named format required). [UG:data-load-azure-config, SQL:functions/infer_schema]
-- Partition paths by source/date/hour and load the narrowest path; selectors fastest→slowest: `FILES` (≤ 1,000) > path > `PATTERN`; for Snowpipe filter at Event Grid, not `PATTERN`. [UG:data-load-considerations-stage, UG:data-load-considerations-load, UG:data-load-considerations-manage]
+- Reuse named `FILE FORMAT` objects in stages, COPY, and `INFER_SCHEMA` (named format required). [UG:data-load-s3-config-storage-integration, SQL:functions/infer_schema]
+- Partition paths by source/date/hour and load the narrowest path; selectors fastest→slowest: `FILES` (≤ 1,000) > path > `PATTERN`; filter Snowpipe at the provider event source, not `PATTERN` (S3 prefix/suffix; Azure Event Grid `data.api`). [UG:data-load-considerations-stage, UG:data-load-considerations-load, UG:data-load-considerations-manage, UG:data-load-snowpipe-auto-s3, UG:data-load-snowpipe-auto-azure]
 
 ## Stages and integrations
 
 - Use named internal stages (grantable); user `@~` and table `@%t` stages can't be granted or dropped. Internal encryption defaults to `SNOWFLAKE_FULL` and is fixed at create; use `SNOWFLAKE_SSE` only for pre-signed URLs (no Tri-Secret Secure). [UG:data-load-overview, SQL:sql/create-stage]
-- Azure: `CREATE STORAGE INTEGRATION ... STORAGE_PROVIDER = 'AZURE' AZURE_TENANT_ID = ... STORAGE_ALLOWED_LOCATIONS = (...)` → `DESC STORAGE INTEGRATION` → open `AZURE_CONSENT_URL` → grant the `AZURE_MULTI_TENANT_APP_NAME` principal `Storage Blob Data Reader` (load) or `Contributor` (unload/REMOVE/PURGE). [UG:data-load-azure-config]
+- AWS S3 (default for these AWS-hosted accounts): define a storage integration with `STORAGE_PROVIDER = 'S3'`, a scoped `STORAGE_AWS_ROLE_ARN`, and `STORAGE_ALLOWED_LOCATIONS`; configure AWS trust with `STORAGE_AWS_IAM_USER_ARN` and `STORAGE_AWS_EXTERNAL_ID` from `DESC INTEGRATION`; use `s3://` stage URLs. [UG:data-load-s3-config-storage-integration, UG:data-load-s3-create-stage]
+- Azure external storage (when needed): `CREATE STORAGE INTEGRATION ... STORAGE_PROVIDER = 'AZURE' AZURE_TENANT_ID = ... STORAGE_ALLOWED_LOCATIONS = (...)` → `DESC STORAGE INTEGRATION` → open `AZURE_CONSENT_URL` → grant the `AZURE_MULTI_TENANT_APP_NAME` principal `Storage Blob Data Reader` (load) or `Contributor` (unload/REMOVE/PURGE). [UG:data-load-azure-config]
 - Use `blob.core.windows.net` URLs, including for ADLS Gen2; service-principal consent can take 1 h or more; revoked access lingers up to 60 min (credential cache). [UG:data-load-azure-config]
-- Never inline `CREDENTIALS = (AZURE_SAS_TOKEN = ...)`; `REQUIRE_STORAGE_INTEGRATION_FOR_STAGE_CREATION` and `..._OPERATION` (default FALSE) enforce integrations. [UG:data-load-azure-config, SQL:parameters]
-- Private path: `USE_PRIVATELINK_ENDPOINT = TRUE` plus `SYSTEM$PROVISION_PRIVATELINK_ENDPOINT` (Business Critical+; billed per endpoint and per GB). [UG:data-load-azure-private]
+- Never inline `CREDENTIALS`; use provider-specific storage integrations. `REQUIRE_STORAGE_INTEGRATION_FOR_STAGE_CREATION` and `..._OPERATION` (default FALSE) enforce integrations. [UG:data-load-s3-config-storage-integration, UG:data-load-azure-config, SQL:parameters]
+- Azure external-stage private connectivity: `USE_PRIVATELINK_ENDPOINT = TRUE` plus `SYSTEM$PROVISION_PRIVATELINK_ENDPOINT` (Business Critical+; billed per endpoint and per GB). [UG:data-load-azure-private]
 - Directory tables: `DIRECTORY = (ENABLE = TRUE AUTO_REFRESH = TRUE NOTIFICATION_INTEGRATION = '<ni>')`, billed as Snowpipe; `CREATE OR REPLACE STAGE` empties the directory and unlinks external tables. [UG:data-load-dirtables, SQL:sql/create-stage]
 
-## Snowpipe on Azure
+## Snowpipe on AWS
+
+- `CREATE PIPE ... AUTO_INGEST = TRUE` consumes S3 ObjectCreate notifications through a Snowflake-managed SQS queue; configure the bucket event notification to target the queue ARN from `SHOW PIPES`. [UG:data-load-snowpipe-auto-s3]
+- Filter S3 notifications by object prefix/suffix; use SNS fan-out when an existing bucket notification conflicts; do not configure overlapping notification prefixes. [UG:data-load-snowpipe-auto-s3]
+- Pipe error notifications use `ERROR_INTEGRATION` with an AWS SNS notification integration and `ON_ERROR = SKIP_FILE`; delivery is at-least-once. [UG:data-load-snowpipe-errors, UG:data-load-snowpipe-errors-sns, UG:notifications/creating-notification-integration-amazon-sns]
+
+## Snowpipe on Azure (for Azure Blob Storage)
 
 - Chain: Event Grid subscription (Event Grid schema) → Storage Queue → `CREATE NOTIFICATION INTEGRATION ... TYPE = QUEUE NOTIFICATION_PROVIDER = AZURE_STORAGE_QUEUE` → consent → `Storage Queue Data Contributor` → `CREATE PIPE ... AUTO_INGEST = TRUE INTEGRATION = '<UPPERCASE>'`. [UG:data-load-snowpipe-auto-azure]
 - Filter `data.api` to `CopyBlob PutBlob PutBlockList FlushWithClose SftpCommit`; renames don't trigger; one queue per integration; never overlap pipe paths. [UG:data-load-snowpipe-auto-azure]
+
+## Pipe operation
+
 - Pipes default to `ON_ERROR = SKIP_FILE`, don't guarantee file order, and can't `PURGE`; clean up with `REMOVE` or storage lifecycle rules. [SQL:sql/copy-into-table, UG:data-load-snowpipe-intro, UG:data-load-snowpipe-manage]
 - `ALTER PIPE ... REFRESH [PREFIX = ...] [MODIFIED_AFTER = ...]` covers files staged in the last 7 days; repair only, not scheduling. [SQL:sql/alter-pipe]
 - Change a pipe: pause with `PIPE_EXECUTION_PAUSED = TRUE`, check `SYSTEM$PIPE_STATUS` shows `PAUSED` with `pendingFileCount` 0, `CREATE OR REPLACE PIPE` (drops load history), resume. [UG:data-load-snowpipe-manage]
-- A pipe paused > 14 days is stale; resume with `SYSTEM$PIPE_FORCE_RESUME(..., 'staleness_check_override')`; alert via `ERROR_INTEGRATION`. [UG:data-load-snowpipe-manage, UG:data-load-snowpipe-errors-azure]
+- A pipe paused > 14 days is stale; resume with `SYSTEM$PIPE_FORCE_RESUME(..., 'staleness_check_override')`; alert via `ERROR_INTEGRATION`. [UG:data-load-snowpipe-manage, UG:data-load-snowpipe-errors]
 
 ## COPY options
 

@@ -400,12 +400,29 @@
       "create": "write"
     }
   },
+  "mcp__databricks_sql_dev_execute_sql": "unknown",
+  "mcp__databricks_sql_dev_execute_sql_read_only": "read",
+  "mcp__databricks_sql_dev_poll_sql_result": "read",
+  "mcp__databricks_sql_prd_execute_sql": "unknown",
+  "mcp__databricks_sql_prd_execute_sql_read_only": "read",
+  "mcp__databricks_sql_prd_poll_sql_result": "read",
+  "mcp__databricks_sql_tst_execute_sql": "unknown",
+  "mcp__databricks_sql_tst_execute_sql_read_only": "read",
+  "mcp__databricks_sql_tst_poll_sql_result": "unknown",
   "mcp__gfs_agentic_qa_compare_at_rest": {
     "selector": "environment",
     "values": {
       "dev": "read",
       "prd": "read",
       "tst": "read"
+    }
+  },
+  "mcp__gfs_agentic_qa_lookup_rows": {
+    "selector": "environment",
+    "values": {
+      "dev": "unknown",
+      "prd": "unknown",
+      "tst": "unknown"
     }
   }
 }

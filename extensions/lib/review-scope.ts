@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { areaFor, buildIndex, resolveRepo, serializeIndex, type ProjectIndex, type RepoRef } from "./project-index.ts";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { areaFor, type IndexSchema } from "./project-index-contract.ts";
+import { generateIndex, resolveRepo } from "./project-index.ts";
 import type { Exec } from "./session.ts";
 import { loadKbSkills } from "./skills.ts";
 
@@ -72,26 +73,12 @@ export async function reviewManifest(exec: Exec, root: string, mode: ScopeMode):
   return files.filter((file) => file.ranges.length > 0).sort((left, right) => (left.path < right.path ? -1 : 1));
 }
 
-async function writeIndexIfChanged(repo: RepoRef, index: ProjectIndex): Promise<void> {
-  const serialized = serializeIndex(index);
-  let existing: string | null = null;
-  try {
-    existing = await readFile(repo.indexPath, "utf8");
-  } catch {
-    existing = null;
-  }
-  if (serialized === existing) return;
-  await mkdir(dirname(repo.indexPath), { recursive: true });
-  await writeFile(repo.indexPath, serialized);
-}
-
-async function kbSelection(exec: Exec, root: string, files: ChangedFile[]): Promise<KbSelection> {
+async function kbSelection(exec: Exec, root: string, files: ChangedFile[], indexSchema: IndexSchema): Promise<KbSelection> {
   const skills = loadKbSkills(SKILLS_DIR).skills;
   const entropy = skills.filter((skill) => skill.gate === "commit-bound").map((skill) => skill.name);
   const repo = await resolveRepo(exec, root);
   if (!repo) return { code: skills.filter((skill) => skill.gate === "files").map((skill) => skill.name), topics: [], entropy };
-  const index = await buildIndex(exec, repo, skills);
-  await writeIndexIfChanged(repo, index);
+  const { index } = await generateIndex(exec, repo, skills, indexSchema);
   const areas = files.flatMap((file) => areaFor(index, file.path) ?? []);
   return {
     code: [...new Set(areas.flatMap((area) => area.domains))].sort(),
@@ -100,8 +87,8 @@ async function kbSelection(exec: Exec, root: string, files: ChangedFile[]): Prom
   };
 }
 
-export async function reviewScope(exec: Exec, root: string | null, mode: ScopeMode): Promise<ReviewScope> {
+export async function reviewScope(exec: Exec, root: string | null, mode: ScopeMode, indexSchema: IndexSchema): Promise<ReviewScope> {
   if (root === null) return { root: "", files: [], ...NO_KB };
   const files = await reviewManifest(exec, root, mode);
-  return { root, files, ...(files.length === 0 ? NO_KB : await kbSelection(exec, root, files)) };
+  return { root, files, ...(files.length === 0 ? NO_KB : await kbSelection(exec, root, files, indexSchema)) };
 }

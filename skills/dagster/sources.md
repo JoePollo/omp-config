@@ -10,7 +10,7 @@ Verified 2026-09-25 against docs.dagster.io (latest 1.13.24), Dagster blog posts
 | `GH:<p>` | <https://github.com/dagster-io/dagster/blob/master/><p> |
 | `PYPI:<pkg>` | <https://pypi.org/project/><pkg>/ |
 | `DBSDK:<p>` | <https://databricks-sdk-py.readthedocs.io/en/latest/><p>.html |
-| `U` | user decisions and environment, observed 2026-09-25: AGENTS.md (dev/tst/prd, read-only external systems, uv), Databricks `data_platform` bundle ownership and platform facts, Azure DevOps CI |
+| `U` | user decisions and environment: AGENTS.md (dev/tst/prd, read-only external systems, uv), Databricks `data_platform` bundle ownership and platform facts, Azure DevOps CI (observed 2026-09-25); Dagster is self-hosted on AWS, with Dagster mode and AWS services unspecified (user-provided 2026-10-02) |
 
 ## Snapshot
 

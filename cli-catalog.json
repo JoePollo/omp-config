@@ -38,7 +38,9 @@
       "account show": "read",
       "extension list": "read",
       "extension list-available": "read",
-      "extension show": "read"
+      "extension show": "read",
+      "keyvault show": "read",
+      "resource list": "read"
     },
     "globalFlags": {
       "--debug": "boolean",
@@ -88,6 +90,7 @@
   },
   "databricks": {
     "commands": {
+      "account groups get": "read",
       "api get": "read",
       "api head": "read",
       "apps manifest": "read",
@@ -97,13 +100,33 @@
       "bundle schema": "read",
       "bundle summary": "read",
       "bundle validate": "read",
+      "catalogs get": "read",
+      "cluster-policies get": "read",
+      "cluster-policies list": "read",
+      "clusters list": "read",
+      "external-locations list": "read",
+      "grants get": "read",
       "grants get-effective": "read",
+      "groups get": "read",
+      "groups list": "read",
       "labs installed": "read",
       "pipelines history": "read",
       "pipelines open": "read",
+      "schemas get": "read",
+      "schemas list": "read",
       "secrets get-secret": "write",
       "secrets-uc get-secret": "write",
-      "serving-endpoints query": "write"
+      "service-principals get": "read",
+      "service-principals list": "read",
+      "serving-endpoints query": "write",
+      "storage-credentials get": "read",
+      "tables get": "read",
+      "tables list": "read",
+      "warehouses get-permissions": "read",
+      "warehouses list": "read",
+      "workspace-conf get-status": "read",
+      "workspace-settings-v2 get-public-workspace-setting": "read",
+      "workspace-settings-v2 list-workspace-settings-metadata": "read"
     },
     "globalFlags": {
       "--debug": "boolean",

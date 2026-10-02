@@ -1,6 +1,6 @@
 # Snowflake KB sources
 
-Verified 2026-09-25 against docs.snowflake.com (pages found through the llms.txt section indexes; markdown at `<page URL>.md`), Snowflake release notes and behavior change (BCR) bundles, the Apache Airflow Snowflake provider docs, the SQLFluff dialect reference, one Snowflake blog post, and the user's AGENTS.md. Re-verify on snowflake-ml-python, Snowflake CLI, Python connector, or Snowflake provider major releases; when a listed BCR bundle becomes generally enabled; and after 2026-12-31 (legacy Cortex function deprecation).
+Verified 2026-09-25 against docs.snowflake.com (pages found through the llms.txt section indexes; markdown at `<page URL>.md`), Snowflake release notes and behavior change (BCR) bundles, the Apache Airflow Snowflake provider docs, the SQLFluff dialect reference, one Snowflake blog post, and the user's AGENTS.md. AWS-specific Snowflake references for WIF, S3, SNS, PrivateLink, and SPCS were checked 2026-10-02; AWS hosting was confirmed by the user. Re-verify on snowflake-ml-python, Snowflake CLI, Python connector, or Snowflake provider major releases; when a listed BCR bundle becomes generally enabled; and after 2026-12-31 (legacy Cortex function deprecation).
 
 | tag | source |
 |---|---|
@@ -17,7 +17,7 @@ Verified 2026-09-25 against docs.snowflake.com (pages found through the llms.txt
 | `BLOG:<slug>` | <https://www.snowflake.com/en/blog/><slug>/ (`managing-snowflakes-compute-resources`: published 2020-12-16, modified 2024-08-12) |
 | `AFP:<p>` | <https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/><p>.html |
 | `SQLFLUFF` | <https://docs.sqlfluff.com/en/stable/reference/dialects.html> (dialect label `snowflake`) |
-| `U` | user environment, observed 2026-09-25: AGENTS.md policy (separate dev, tst, prd; external services read-only unless permitted; Python only through uv; no new dependencies without approval; Azure, Azure DevOps, Entra ID; Airflow on Astronomer) and the omp quality gate (sqlfluff on changed `*.sql`) |
+| `U` | user environment, observed 2026-10-02: AGENTS.md policy (separate dev, tst, prd; external services read-only unless permitted; Python only through uv; no new dependencies without approval; Azure, Azure DevOps, Entra ID; Airflow on Astronomer); Snowflake cloud provider is AWS; and the omp quality gate (sqlfluff on changed `*.sql`) |
 
 ## Snapshot
 

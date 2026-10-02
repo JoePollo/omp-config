@@ -34,5 +34,5 @@ def resources() -> dg.Definitions:
 ```
 
 - Integers: `dg.EnvVar.int("NAME")`; component YAML: `{{ env.NAME }}`.
-- Values come from the deployment (Dagster+ environment variables, Kubernetes Secrets from Key Vault) or a local `.env` that is never committed. Details: skill://dagster/resources.md.
+- Values come from deployment configuration (Dagster+ environment variables only when configured) or a local `.env` that is never committed; secret delivery on the self-hosted AWS runtime is unspecified, so follow deployment config. Key Vault via CSI is an AKS reference only. Details: skill://dagster/resources.md.
 Exception: tests and scripts outside Dagster definitions.

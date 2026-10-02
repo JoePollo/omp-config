@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { areaFor, buildIndex, ensureGitignored, GITIGNORE_LINE, readIndexFile, resolveRepo, serializeIndex, type ProjectIndex, type RepoRef } from "./lib/project-index.ts";
+import { generateIndex, GITIGNORE_LINE, INDEX_RELATIVE_PATH, resolveRepo, type RepoRef } from "./lib/project-index.ts";
+import { areaFor, INDEX_DEFINITION, readIndex, type IndexSchema, type ProjectIndex } from "./lib/project-index-contract.ts";
 import { isTaskSession, latestMode, type BranchEntry, type Exec } from "./lib/session.ts";
 import { commandSegments } from "./lib/shell.ts";
 import { isInternalUrl, mcpToolName, mutationTargets, stripReadSelector } from "./lib/tool-args.ts";
@@ -13,6 +14,7 @@ const AGENT_DIR = join(import.meta.dir, "..");
 const SKILLS_DIR = join(AGENT_DIR, "skills");
 const CODE_EXTENSIONS = new Set(".py .pyi .ipynb .ts .tsx .js .jsx .mjs .cjs .sql .tf .tfvars .hcl .ps1 .psm1 .sh .bash .cs .go .rs .java .kt .scala .yml .yaml .json .toml".split(" "));
 const ONE_SEGMENT = /^[^/]+\/$/;
+const INDEX_FILE_NAME = /project-index\.yaml/i;
 type RouterContext = {
   cwd: string;
   sessionManager: { getBranch(): unknown };
@@ -142,6 +144,21 @@ function childAreas(index: ProjectIndex, directory: string): ProjectIndex["map"]
     const remainder = area.path.slice(prefix.length);
     return ONE_SEGMENT.test(remainder);
   });
+}
+
+function formatIndexSection(
+  path: string,
+  repo: RepoRef,
+  absolute: string,
+  index: ProjectIndex,
+): string {
+  const relativePath = relative(repo.worktreeRoot, absolute);
+  const relPath = relativePath.replaceAll("\\", "/");
+  const key = relPath && pathExistsAsDirectory(absolute) === absolute ? `${relPath}/` : relPath;
+  const owning = areaFor(index, key);
+  const directChildren = childAreas(index, key);
+  const children = directChildren.map((child) => `  ${orientationArea(child)}`);
+  return [`${path}:`, owning ? orientationArea(owning) : "- no indexed area", ...children].join("\n");
 }
 
 function startAfterReset(branch: BranchEntry[]): number {
@@ -282,8 +299,15 @@ function mcpKeys(toolName: string, input: Record<string, unknown>, skills: KbSki
   return keys;
 }
 
+function scriptBlockReason(toolName: string, input: Record<string, unknown>): string | null {
+  const script = toolName === "bash" ? input.command : toolName === "eval" ? input.code : undefined;
+  if (typeof script !== "string" || !INDEX_FILE_NAME.test(script)) return null;
+  return `[domain-router] ${toolName} calls may not name ${INDEX_RELATIVE_PATH}; read it with the project_index tool and change routing in the skills/<name>/SKILL.md kb rules.`;
+}
+
 export default function domainRouter(pi: ExtensionAPI): void {
   const exec: Exec = (command, args, options) => pi.exec(command, args, options);
+  const indexSchema: IndexSchema = pi.arktype(INDEX_DEFINITION);
   let ready: Promise<void> | undefined;
   let skills: KbSkill[] = [];
   let cwdRepo: RepoRef | null = null;
@@ -308,26 +332,24 @@ export default function domainRouter(pi: ExtensionAPI): void {
     return repo;
   }
 
-  async function prepareTaskIndex(repo: RepoRef): Promise<ProjectIndex> {
-    return readIndexFile(repo) ?? await buildIndex(exec, repo, skills);
+  async function regenerate(repo: RepoRef, ctx: RouterContext): Promise<ProjectIndex> {
+    const { index, gitignoreUpdated, write } = await generateIndex(exec, repo, skills, indexSchema);
+    if (gitignoreUpdated) notify(ctx, `project-index: added ${GITIGNORE_LINE} to ${join(repo.mainRoot, ".gitignore")}`);
+    if (write.status === "failed") {
+      notify(ctx, `project-index: could not write ${repo.indexPath}: ${write.error}`, "error");
+    } else {
+      const domainNames = index.domains.map((domain) => domain.name).join(", ") || "none";
+      notify(ctx, `project-index: ${write.status} ${repo.indexPath} (${index.map.length} areas; domains: ${domainNames})`);
+    }
+    indexes.set(repo.mainRoot, index);
+    return index;
   }
 
-  async function prepareMainIndex(repo: RepoRef, ctx: RouterContext): Promise<ProjectIndex> {
-    if (await ensureGitignored(exec, repo)) notify(ctx, `project-index: added ${GITIGNORE_LINE} to ${join(repo.mainRoot, ".gitignore")}`);
-    const index = await buildIndex(exec, repo, skills);
-    const serialized = serializeIndex(index);
-    let current: string | null = null;
-    try {
-      current = readFileSync(repo.indexPath, "utf8");
-    } catch {}
-    if (current !== serialized) {
-      mkdirSync(dirname(repo.indexPath), { recursive: true });
-      writeFileSync(repo.indexPath, serialized);
-    }
-    const changed = current === serialized ? "unchanged" : "written";
-    const domainNames = index.domains.map((domain) => domain.name).join(", ") || "none";
-    notify(ctx, `project-index: ${changed} ${repo.indexPath} (${index.map.length} areas; domains: ${domainNames})`);
-    return index;
+  async function loadIndex(repo: RepoRef, ctx: RouterContext): Promise<ProjectIndex> {
+    const current = taskSession ? readIndex(repo.indexPath, skills, indexSchema) : null;
+    if (!current) return regenerate(repo, ctx);
+    indexes.set(repo.mainRoot, current);
+    return current;
   }
 
   function reloadSkills(ctx: RouterContext): void {
@@ -336,9 +358,6 @@ export default function domainRouter(pi: ExtensionAPI): void {
     for (const error of loaded.errors) notify(ctx, `domain-router: ${error}`, "error");
   }
 
-  async function prepareRepoIndex(repo: RepoRef, isTask: boolean, ctx: RouterContext): Promise<ProjectIndex> {
-    return isTask ? await prepareTaskIndex(repo) : await prepareMainIndex(repo, ctx);
-  }
 
   async function prepare(ctx: RouterContext): Promise<void> {
     taskSession = false;
@@ -347,10 +366,7 @@ export default function domainRouter(pi: ExtensionAPI): void {
       reloadSkills(ctx);
       taskSession = isTaskSession(ctx.sessionManager.getBranch() as BranchEntry[]);
       cwdRepo = await resolveDirectory(ctx.cwd);
-      if (!cwdRepo) return;
-      const index = await prepareRepoIndex(cwdRepo, taskSession, ctx);
-      indexes.set(cwdRepo.mainRoot, index);
-      repos.set(normalizedRoot(cwdRepo.mainRoot), cwdRepo);
+      if (cwdRepo) await loadIndex(cwdRepo, ctx);
     } catch (error) {
       const failedRepo = cwdRepo ?? resolved.get(ctx.cwd);
       if (failedRepo) indexes.delete(failedRepo.mainRoot);
@@ -376,51 +392,20 @@ export default function domainRouter(pi: ExtensionAPI): void {
     return resolveDirectory(existing);
   }
 
-  async function indexFor(repo: RepoRef): Promise<ProjectIndex> {
-    const existing = indexes.get(repo.mainRoot);
-    if (existing) return existing;
-    const index = await buildIndex(exec, repo, skills);
-    indexes.set(repo.mainRoot, index);
-    repos.set(normalizedRoot(repo.mainRoot), repo);
-    return index;
-  }
-
-  async function indexSection(path: string, cwd: string): Promise<string> {
-    const absolute = resolve(cwd, path);
-    const repo = await repoForPath(absolute, cwd);
+  async function indexSection(path: string, ctx: RouterContext): Promise<string> {
+    const absolute = resolve(ctx.cwd, path);
+    const repo = await repoForPath(absolute, ctx.cwd);
     if (!repo) return `${path}: not inside a git repository`;
-    const index = await indexFor(repo);
-    const relativePath = relative(repo.worktreeRoot, absolute);
-    const relPath = relativePath.replaceAll("\\", "/");
-    const key = relPath && pathExistsAsDirectory(absolute) === absolute ? `${relPath}/` : relPath;
-    const owning = areaFor(index, key);
-    const directChildren = childAreas(index, key);
-    const children = directChildren.map((child) => `  ${orientationArea(child)}`);
-    return [`${path}:`, owning ? orientationArea(owning) : "- no indexed area", ...children].join("\n");
+    const index = indexes.get(repo.mainRoot) ?? await loadIndex(repo, ctx);
+    return formatIndexSection(path, repo, absolute, index);
   }
 
-  function writeRefreshed(index: ProjectIndex, repo: RepoRef): void {
-    if (!cwdRepo || repo.mainRoot !== cwdRepo.mainRoot || taskSession) return;
-    const serialized = serializeIndex(index);
-    let current: string | null = null;
-    try {
-      current = readFileSync(repo.indexPath, "utf8");
-    } catch {}
-    if (current === serialized) return;
-    mkdirSync(dirname(repo.indexPath), { recursive: true });
-    writeFileSync(repo.indexPath, serialized);
-  }
-
-  async function areaKeysForPath(absolute: string, repo: RepoRef): Promise<string[]> {
-    let index = await indexFor(repo);
+  async function areaKeysForPath(absolute: string, repo: RepoRef, ctx: RouterContext): Promise<string[]> {
     const relPath = relative(repo.worktreeRoot, absolute).replaceAll("\\", "/");
-    let area = areaFor(index, relPath);
+    let area = areaFor(indexes.get(repo.mainRoot) ?? await loadIndex(repo, ctx), relPath);
     if (!area && !refreshedThisTurn.has(repo.mainRoot)) {
-      index = await buildIndex(exec, repo, skills);
-      indexes.set(repo.mainRoot, index);
       refreshedThisTurn.add(repo.mainRoot);
-      writeRefreshed(index, repo);
-      area = areaFor(index, relative(repo.worktreeRoot, absolute).replaceAll("\\", "/"));
+      area = areaFor(await regenerate(repo, ctx), relPath);
     }
     return area ? [...area.domains, ...area.topics] : [];
   }
@@ -438,7 +423,7 @@ export default function domainRouter(pi: ExtensionAPI): void {
     const repo = await repoForPath(absolute, ctx.cwd);
     if (!repo) return [];
     return uniq([
-      ...await areaKeysForPath(absolute, repo),
+      ...await areaKeysForPath(absolute, repo, ctx),
       ...await commitBoundKeys(absolute, ctx, mutation, read),
     ]);
   }
@@ -487,7 +472,7 @@ export default function domainRouter(pi: ExtensionAPI): void {
     cwd: string,
   ): Promise<string | null> {
     const writeIndexPath = await generatedIndexTarget(targets, cwd);
-    if (writeIndexPath) return `[domain-router] ${writeIndexPath} is generated at startup from skill kb rules; change the rules in skills/<name>/SKILL.md instead.`;
+    if (writeIndexPath) return `[domain-router] ${writeIndexPath} is generated from skill kb rules; change the rules in skills/<name>/SKILL.md instead.`;
     if (toolName === "read" && typeof input.path === "string") {
       const readPath = stripReadSelector(input.path);
       const readIndexPath = await generatedIndexTarget([{ path: readPath }], cwd);
@@ -531,7 +516,7 @@ export default function domainRouter(pi: ExtensionAPI): void {
       const { paths } = params as { paths: string[] };
       const sections: string[] = [];
       for (const path of paths.length ? paths : ["."]) {
-        const section = await indexSection(path, ctx.cwd);
+        const section = await indexSection(path, ctx);
         sections.push(section);
       }
       return { content: [{ type: "text", text: sections.join("\n\n") }], details: { paths } };
@@ -567,7 +552,6 @@ export default function domainRouter(pi: ExtensionAPI): void {
     const keys = uniq(pending);
     if (!keys.length) return;
     const prepared = contentOf(keys, "first prompt", skills, indexes, repos, missing, (message, level) => notify(ctx, message, level));
-    for (const key of prepared.included) queued.add(key);
     if (!prepared.included.length) return;
     return { message: { customType: KB_MESSAGE, content: prepared.content, display: false, details: { keys: prepared.included } } };
   });
@@ -577,7 +561,7 @@ export default function domainRouter(pi: ExtensionAPI): void {
     const input = asInput(event.input);
     if (!input) return;
     const targets = mutationTargets(event.toolName, input);
-    const blockReason = await indexBlockReason(targets, event.toolName, input, ctx.cwd);
+    const blockReason = scriptBlockReason(event.toolName, input) ?? await indexBlockReason(targets, event.toolName, input, ctx.cwd);
     if (blockReason) return { block: true, reason: blockReason };
     if (!mutationToolsActive(pi)) return;
     const branch = ctx.sessionManager.getBranch() as unknown as BranchEntry[];

@@ -18,6 +18,8 @@ sql, Python, and cloud computing.
   (sessions started in ~/.omp/agent load it).
 - Plans should attempt to identify where a plan can be fanned out to parallel
   subagents, and make this obvious to the implementing agents.
+- Scouts should always be preferred when gathering heuristics; this includes but is not all inclusive to: reading online documentation, reading instruction files, reading code, using read actions from MCPs or CLIs. The scouts should report back heuristics to the calling agent.
+- Prefer to use code to gather and aggregate data; this adds determinism, reduces context bloat, and reduces token cost.
 
 ## MODERN TECHNOLOGY STACK
 

@@ -79,8 +79,9 @@ verification; `git init` or commits there only when the approved plan says so.
 
 - `AGENTS.md` loads into every session: cross-domain user standards only, terse.
   Domain rules go to a skill pack; detectable anti-patterns to a TTSR rule.
-- `.omp/AGENTS.md` stays the single import line, and `.omp/` holds nothing else;
-  agent-dir guidance goes in this guide.
+- `.omp/AGENTS.md` stays the single import line, and `.omp/` holds nothing else
+  besides the generated `project-index.yaml`; agent-dir guidance goes in this
+  guide.
 - Context files expand a bare `@path` token (relative to the file, up to 5
   hops); code spans and fenced blocks stay literal.
 - Verify after editing this guide or `.omp/AGENTS.md`: run
@@ -96,8 +97,9 @@ verification; `git init` or commits there only when the approved plan says so.
   prints the new value; `Unknown setting: <key>` (exit 1) means a wrong path.
   Semantics: omp://settings.md. Arrays replace, not merge, across settings
   layers.
-- `modelRoles` names are referenced by agents (`"@judge"`, `"@smol"`): rename or
-  remove a role only together with every agent that uses it.
+- `modelRoles` names are referenced by agents (`"@judge"`, `"@smol"`) and by
+  `extensions/plan-orchestrator.ts` (`orchestrator`, `"@default"`): rename or
+  remove a role only together with every agent and extension that uses it.
 - Invalid YAML makes OMP quarantine the file to a `.broken-*` sibling and fail
   startup; fix and restore it at once.
 - `mcp.json`: `mcpServers` map (omp://mcp-config.md). Credentials only as
@@ -178,9 +180,20 @@ hide: true
 - Each KB's `SKILL.md` `kb` mapping is the sole routing source for files,
   project roots, content, commands, MCP tools, topics, and commit-bound rules. A
   new KB does not require an extension-code/domain-union change.
+- `generateIndex` (`extensions/lib/project-index.ts`) is the index's only
+  writer. Every regeneration (main-session start, an area miss, a task session
+  whose file fails the contract, the quality gate's review scope) asserts the
+  contract, then writes `.omp/project-index.yaml` only when its content
+  changed. The contract is `INDEX_DEFINITION` in
+  `extensions/lib/project-index-contract.ts`, built with `pi.arktype` by each
+  extension that reads or writes the index. Task sessions route from the file
+  (`readIndex`) when it passes the contract and its `generator.rules` equals
+  the current skill-rules hash; area routing injects the owning area's
+  `domains` and `topics` (`areaFor`).
 - Agents consume the index through the extension: the orientation lists `./` and
-  depth-1 areas, the `project_index` tool answers path queries, and `read` of
-  `.omp/project-index.yaml` is blocked like writes.
+  depth-1 areas, the `project_index` tool answers path queries, and `read`,
+  `edit`, `write`, `ast_edit`, `bash`, and `eval` calls that target or name
+  `.omp/project-index.yaml` are blocked.
 - A `kb: <keys>.` span in a prompt, task prompts included, preloads each named
   KB index and each `<kb>/<topic>.md` topic file (`requestedKbKeys` in
   `extensions/domain-router.ts`); `extensions/quality-gate.ts` writes that span
@@ -321,7 +334,7 @@ interruptMode: never
     file modified after the process loaded it.
   - Suppressions: `<repo_root>/.omp/quality-suppressions.yaml` is user-owned and
     gitignored; `ensureGitignored` (`extensions/lib/project-index.ts`) appends
-    `/.omp/` to a repo's `.gitignore` at main-session start unless a
+    `/.omp/` to a repo's `.gitignore` on every index regeneration unless a
     `.gitignore` already decides both `.omp/project-index.yaml` and that file.
     It holds exactly one key, `suppressions`: a list of entries with exactly
     `agent` (`entropy-review` or `code-review`), `file` (repo-relative, `/`
@@ -399,6 +412,26 @@ interruptMode: never
   s): one issue key in a plan-mode prompt sets the story, otherwise a warning
   toast points to `/jira-story <KEY>`; a plan approved without a story is staged
   unposted, and `/jira-story <KEY>` posts it.
+- `extensions/plan-orchestrator.ts` turns the main session that executes an
+  interactively approved plan into an orchestrator: `findPlanMarker` returns the
+  synthetic `Plan approved.` message (a `plan-yolo-handoff` run keeps its
+  `--plan-yolo-into` model and tools), the mode is `none`, and the session is
+  not a task session. `before_agent_start` restricts the active tools to
+  `task`, `wait`, `todo`, `ask`, `read`, `write`, `review_verdict`, and
+  `JIRA_COMMENT_TOOL` (exported by `extensions/lib/tool-args.ts`), switches once
+  per approval to `modelRoles.orchestrator` plus its `:thinking` suffix, and
+  appends the orchestrator contract to the system prompt. `tool_call` blocks
+  every other tool, `read` outside `agent://`, `artifact://`, `history://`,
+  `local://`, and `proc://`, and `write` outside `agent://`, `local://`,
+  `proc://`, and the Jira comment device. `before_subagent_spawn` runs children
+  that would inherit the orchestrator's model (no `modelRole`) on `"@default"`.
+  Leaving (plan mode, `/new`, a session without an approval) restores the saved
+  tools while the restricted set is still active and, in mode `none`, the saved
+  model while the session still runs the orchestrator model.
+- `before_agent_start` handlers tolerate re-entry: a handler that changes the
+  tools or the model (plan-orchestrator) makes the host discard that attempt and
+  rerun the whole chain, so no handler records state from an attempt the host
+  may discard.
 - Extensions load once at OMP startup, so edits apply after a restart. Load
   errors go to `~/.omp/logs/omp.<date>.<pid>.log`.
 - This dir has no `tsconfig.json` or lint config. The quality gate's `typescript`

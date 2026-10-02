@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { runGate, type GateReport, type GateStep } from "./lib/gate-runner.ts";
+import { INDEX_DEFINITION, type IndexSchema } from "./lib/project-index-contract.ts";
 import { allowedReport, reviewReport, type Finding, type ReportSource, type ReviewReport, type ReviewStatus } from "./lib/review-report.ts";
 import { formatRanges, reviewManifest, reviewScope, type ReviewScope, type ScopeMode } from "./lib/review-scope.ts";
 import { loadSuppressions, SUPPRESSIONS_RELATIVE_PATH } from "./lib/review-suppressions.ts";
@@ -545,6 +546,7 @@ export default function qualityGate(pi: ExtensionAPI): void {
   const requests = new Map<string, number>();
   const nudged = new Set<string>();
   const exec: Exec = (command, args, options) => pi.exec(command, args, options);
+  const indexSchema: IndexSchema = pi.arktype(INDEX_DEFINITION);
   let gateJob: GateJob | null = null;
   let scopeJob: ScopeJob | null = null;
   let staleWarned = false;
@@ -608,7 +610,7 @@ export default function qualityGate(pi: ExtensionAPI): void {
     try {
       ctx.setTimeout(async () => {
         ctx.ui.setStatus(STATUS_KEY, "quality gate: computing the review scope");
-        job.result = await settle(reviewScope(exec, target.root, target.mode));
+        job.result = await settle(reviewScope(exec, target.root, target.mode, indexSchema));
         ctx.ui.setStatus(STATUS_KEY, undefined);
       }, 0);
     } catch (error) {
@@ -634,7 +636,7 @@ export default function qualityGate(pi: ExtensionAPI): void {
 
   async function reviewInputs(target: ResultTarget, cwd: string): Promise<ReviewInputs> {
     const snapshot = await fingerprint(pi, cwd);
-    const scope = await reviewScope(exec, target.root ?? (await repoRoot(pi, cwd)), target.mode);
+    const scope = await reviewScope(exec, target.root ?? (await repoRoot(pi, cwd)), target.mode, indexSchema);
     return { snapshot, scope };
   }
 
@@ -772,7 +774,7 @@ export default function qualityGate(pi: ExtensionAPI): void {
         ctx.ui.notify("/hybrid-review runs outside plan mode; exit plan mode first.", "warning");
         return;
       }
-      const settled = await settle(reviewScope(exec, await repoRoot(pi, ctx.cwd), mode));
+      const settled = await settle(reviewScope(exec, await repoRoot(pi, ctx.cwd), mode, indexSchema));
       if ("error" in settled) {
         ctx.ui.notify(`/hybrid-review ${mode}: could not compute the review scope: ${errorText(settled.error)}`, "error");
         return;

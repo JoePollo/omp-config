@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-import { appendFileSync, closeSync, openSync, readFileSync, readSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
+import { skillRulesHash, type AreaEntry, type IndexSchema, type ProjectIndex } from "./project-index-contract.ts";
 import { SUPPRESSIONS_RELATIVE_PATH } from "./review-suppressions.ts";
 import type { Exec } from "./session.ts";
 import type { KbSkill, Probe } from "./skills.ts";
@@ -10,25 +10,8 @@ export const GITIGNORE_LINE = "/.omp/";
 const LOCAL_FILES = [INDEX_RELATIVE_PATH, SUPPRESSIONS_RELATIVE_PATH];
 
 export type RepoRef = { worktreeRoot: string; mainRoot: string; indexPath: string };
-export type AreaEntry = {
-  path: string;
-  files: number;
-  types: Record<string, number>;
-  readme: string | null;
-  domains: string[];
-  topics: string[];
-};
-export type ProjectIndex = {
-  version: 1;
-  generator: { name: "domain-router"; commit: string; rules: string };
-  project: {
-    name: string;
-    synopsis: string;
-    synopsisSource: "README.md" | "pyproject.toml" | "package.json" | "databricks.yml" | "generated";
-  };
-  domains: Array<{ name: string; files: number }>;
-  map: AreaEntry[];
-};
+type IndexWrite = { status: "written" | "unchanged" } | { status: "failed"; error: string };
+type GeneratedIndex = { index: ProjectIndex; gitignoreUpdated: boolean; write: IndexWrite };
 
 type FilePath = { display: string; lower: string };
 type AreaStats = Omit<AreaEntry, "path">;
@@ -39,13 +22,6 @@ const PROBE_LIMIT = 5_000;
 const AREA_LIMIT = 150;
 const globCache = new Map<string, Bun.Glob>();
 const EMPTY_PATHS = new Set<string>();
-const INDEX_KEYS = ["version", "generator", "project", "domains", "map"];
-const GENERATOR_KEYS = ["name", "commit", "rules"];
-const PROJECT_KEYS = ["name", "synopsis", "synopsisSource"];
-const DOMAIN_KEYS = ["name", "files"];
-const AREA_KEYS = ["path", "files", "types", "readme", "domains", "topics"];
-const SYNOPSIS_SOURCES = new Set(["README.md", "pyproject.toml", "package.json", "databricks.yml", "generated"]);
-
 
 function intersects(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
   for (const value of left) if (right.has(value)) return true;
@@ -323,7 +299,7 @@ export async function resolveRepo(exec: Exec, dir: string): Promise<RepoRef | nu
   return { worktreeRoot, mainRoot, indexPath: join(mainRoot, INDEX_RELATIVE_PATH) };
 }
 
-export async function ensureGitignored(exec: Exec, repo: RepoRef): Promise<boolean> {
+async function ensureGitignored(exec: Exec, repo: RepoRef): Promise<boolean> {
   const result = await exec("git", ["check-ignore", "--no-index", "-v", "--", ...LOCAL_FILES], { cwd: repo.mainRoot });
   const decided = result.stdout.split("\n").filter((line) => /\.gitignore:\d+:/.test(line.split("\t", 1)[0]));
   if (decided.length === LOCAL_FILES.length) return false;
@@ -445,7 +421,7 @@ function buildAreas(
     .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 }
 
-export async function buildIndex(exec: Exec, repo: RepoRef, skills: KbSkill[]): Promise<ProjectIndex> {
+async function buildIndex(exec: Exec, repo: RepoRef, skills: KbSkill[]): Promise<ProjectIndex> {
   const orderedSkills = skills.slice().sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
   const [listed, head] = await Promise.all([
     exec("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: repo.mainRoot }),
@@ -461,8 +437,7 @@ export async function buildIndex(exec: Exec, repo: RepoRef, skills: KbSkill[]): 
   const areas = buildAreas(repo.mainRoot, files, dirs, orderedSkills, skillFiles, matches.topics);
   const name = basename(repo.mainRoot);
   const synopsis = projectSynopsis(repo.mainRoot, name, files, dirs.depth1);
-  const ruleSet = orderedSkills.map((skill) => [skill.name, skill.raw]);
-  const rules = createHash("sha256").update(JSON.stringify(ruleSet)).digest("hex").slice(0, 12);
+  const rules = skillRulesHash(orderedSkills);
   return {
     version: 1,
     generator: { name: "domain-router", commit, rules },
@@ -476,186 +451,7 @@ function isRecord(value: unknown): value is RecordValue {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function validateObject(value: unknown, path: string, allowed: string[], errors: string[]): RecordValue | null {
-  if (!isRecord(value)) {
-    errors.push(`${path}: must be an object`);
-    return null;
-  }
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) errors.push(`${path}.${key}: unknown key`);
-  }
-  return value;
-}
-
-function validateString(value: unknown, path: string, errors: string[]): value is string {
-  if (typeof value === "string") return true;
-  errors.push(`${path}: must be a string`);
-  return false;
-}
-
-function validateCount(value: unknown, path: string, errors: string[], positive = false): value is number {
-  if (typeof value === "number" && Number.isInteger(value) && value >= (positive ? 1 : 0)) return true;
-  errors.push(`${path}: must be a ${positive ? "positive" : "non-negative"} integer`);
-  return false;
-}
-
-function validateStringArray(value: unknown, path: string, errors: string[]): value is string[] {
-  if (!Array.isArray(value)) {
-    errors.push(`${path}: must be an array`);
-    return false;
-  }
-  value.forEach((item, index) => validateString(item, `${path}[${index}]`, errors));
-  return value.every((item) => typeof item === "string");
-}
-
-function validateSortedNames(values: unknown[], path: string, errors: string[]): void {
-  let previous: string | undefined;
-  values.forEach((value, index) => {
-    if (typeof value !== "string") return;
-    if (previous !== undefined && previous >= value) errors.push(`${path}[${index}]: names must be unique and sorted`);
-    previous = value;
-  });
-}
-
-function validateCommit(value: unknown, errors: string[]): void {
-  if (typeof value !== "string") {
-    errors.push("$.generator.commit: must be a 40-hex commit or none");
-    return;
-  }
-  if (value !== "none" && !/^[0-9a-f]{40}$/i.test(value)) errors.push("$.generator.commit: must be a 40-hex commit or none");
-}
-
-function validateRulesHash(value: unknown, errors: string[]): void {
-  if (typeof value !== "string" || !/^[0-9a-f]{12}$/i.test(value)) errors.push("$.generator.rules: must be 12 hex characters");
-}
-
-function validateGenerator(value: unknown, errors: string[]): void {
-  const generator = validateObject(value, "$.generator", GENERATOR_KEYS, errors);
-  if (!generator) return;
-  if (generator.name !== "domain-router") errors.push('$.generator.name: must equal "domain-router"');
-  validateCommit(generator.commit, errors);
-  validateRulesHash(generator.rules, errors);
-}
-
-function validateSynopsis(value: unknown, errors: string[]): void {
-  if (validateString(value, "$.project.synopsis", errors) && value.length > 600) {
-    errors.push("$.project.synopsis: must be at most 600 characters");
-  }
-}
-
-function validateSynopsisSource(value: unknown, errors: string[]): void {
-  if (typeof value !== "string" || !SYNOPSIS_SOURCES.has(value)) errors.push("$.project.synopsisSource: invalid source");
-}
-
-function validateProject(value: unknown, errors: string[]): void {
-  const project = validateObject(value, "$.project", PROJECT_KEYS, errors);
-  if (!project) return;
-  validateString(project.name, "$.project.name", errors);
-  validateSynopsis(project.synopsis, errors);
-  validateSynopsisSource(project.synopsisSource, errors);
-}
-
-function validateDomain(value: unknown, index: number, names: unknown[], errors: string[]): void {
-  const path = `$.domains[${index}]`;
-  const domain = validateObject(value, path, DOMAIN_KEYS, errors);
-  if (!domain) return;
-  validateString(domain.name, `${path}.name`, errors);
-  validateCount(domain.files, `${path}.files`, errors, true);
-  names.push(domain.name);
-}
-
-function validateDomains(value: unknown, errors: string[]): void {
-  if (!Array.isArray(value)) {
-    errors.push("$.domains: must be an array");
-    return;
-  }
-  const names: unknown[] = [];
-  for (let index = 0; index < value.length; index++) validateDomain(value[index], index, names, errors);
-  validateSortedNames(names, "$.domains", errors);
-}
-
-function validateAreaPath(value: unknown, path: string, paths: unknown[], errors: string[]): void {
-  if (!validateString(value, `${path}.path`, errors)) return;
-  const parts = value.split("/").filter(Boolean);
-  if (value !== "./" && (!/^(?:[^/\\]+\/){1,3}$/.test(value) || parts.some((part) => part === "." || part === ".."))) {
-    errors.push(`${path}.path: invalid area path`);
-  }
-  paths.push(value);
-}
-
-function validateTypeEntry(key: string, value: unknown, path: string, errors: string[]): void {
-  if (key !== "(none)" && !/^\.[^/\\]*$/.test(key)) errors.push(`${path}[${JSON.stringify(key)}]: invalid extension`);
-  validateCount(value, `${path}[${JSON.stringify(key)}]`, errors, true);
-}
-
-function typeEntryIsOutOfOrder(previous: { key: string; count: number }, key: string, count: number): boolean {
-  return previous.count < count || previous.count === count && previous.key > key;
-}
-
-function validateTypeEntries(types: RecordValue, path: string, errors: string[]): void {
-  const keys = Object.keys(types);
-  if (keys.length > 5) errors.push(`${path}: must contain at most 5 entries`);
-  let previous: { key: string; count: number } | undefined;
-  for (const key of keys) {
-    const value = types[key];
-    validateTypeEntry(key, value, path, errors);
-    if (typeof value !== "number") continue;
-    if (previous && typeEntryIsOutOfOrder(previous, key, value)) errors.push(`${path}: entries must be sorted by count then name`);
-    previous = { key, count: value };
-  }
-}
-
-function validateAreaTypes(value: unknown, path: string, errors: string[]): void {
-  if (!isRecord(value)) {
-    errors.push(`${path}: must be an object`);
-    return;
-  }
-  validateTypeEntries(value, path, errors);
-}
-
-function validateAreaReadme(value: unknown, path: string, errors: string[]): void {
-  if (value !== null && !validateString(value, path, errors)) return;
-  if (typeof value === "string" && value.length > 200) errors.push(`${path}: must be at most 200 characters`);
-}
-
-function validateArea(value: unknown, index: number, paths: unknown[], errors: string[]): void {
-  const path = `$.map[${index}]`;
-  const area = validateObject(value, path, AREA_KEYS, errors);
-  if (!area) return;
-  validateAreaPath(area.path, path, paths, errors);
-  validateCount(area.files, `${path}.files`, errors);
-  validateAreaTypes(area.types, `${path}.types`, errors);
-  validateAreaReadme(area.readme, `${path}.readme`, errors);
-  const domains = area.domains;
-  if (validateStringArray(domains, `${path}.domains`, errors)) validateSortedNames(domains, `${path}.domains`, errors);
-  validateStringArray(area.topics, `${path}.topics`, errors);
-}
-
-function validateAreaList(value: unknown, errors: string[]): void {
-  if (!Array.isArray(value)) {
-    errors.push("$.map: must be an array");
-    return;
-  }
-  const paths: unknown[] = [];
-  for (let index = 0; index < value.length; index++) validateArea(value[index], index, paths, errors);
-  if (value.length > AREA_LIMIT) errors.push(`$.map: must contain at most ${AREA_LIMIT} areas`);
-  validateSortedNames(paths, "$.map", errors);
-  if (!value.some((area) => isRecord(area) && area.path === "./")) errors.push('$.map: must include "./"');
-}
-
-export function validateIndex(data: unknown): { index: ProjectIndex | null; errors: string[] } {
-  const errors: string[] = [];
-  const root = validateObject(data, "$", INDEX_KEYS, errors);
-  if (!root) return { index: null, errors };
-  if (root.version !== 1) errors.push("$.version: must equal 1");
-  validateGenerator(root.generator, errors);
-  validateProject(root.project, errors);
-  validateDomains(root.domains, errors);
-  validateAreaList(root.map, errors);
-  return { index: errors.length === 0 ? data as ProjectIndex : null, errors };
-}
-
-export function serializeIndex(index: ProjectIndex): string {
+function serializeIndex(index: ProjectIndex): string {
   const ordered = {
     version: index.version,
     generator: { name: index.generator.name, commit: index.generator.commit, rules: index.generator.rules },
@@ -667,22 +463,34 @@ export function serializeIndex(index: ProjectIndex): string {
   return yaml.endsWith("\n") ? yaml : `${yaml}\n`;
 }
 
-export function readIndexFile(repo: RepoRef): ProjectIndex | null {
+function writeIndexFile(path: string, serialized: string): IndexWrite {
+  let current: string | null;
   try {
-    const parsed = Bun.YAML.parse(readFileSync(repo.indexPath, "utf8"));
-    return validateIndex(parsed).index;
+    current = readFileSync(path, "utf8");
   } catch {
-    return null;
+    current = null;
+  }
+  if (current === serialized) return { status: "unchanged" };
+  const temporary = `${path}.${process.pid}.tmp`;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(temporary, serialized);
+    renameSync(temporary, path);
+    return { status: "written" };
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    return { status: "failed", error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-export function areaFor(index: ProjectIndex, relPath: string): AreaEntry | null {
-  const normalized = relPath.replaceAll("\\", "/");
-  if (!normalized.includes("/")) return index.map.find((area) => area.path === "./") ?? null;
-  const lower = normalized.toLowerCase();
-  let match: AreaEntry | null = null;
-  for (const area of index.map) {
-    if (area.path !== "./" && lower.startsWith(area.path.toLowerCase()) && (!match || area.path.length > match.path.length)) match = area;
+export async function generateIndex(exec: Exec, repo: RepoRef, skills: KbSkill[], schema: IndexSchema): Promise<GeneratedIndex> {
+  const built = await buildIndex(exec, repo, skills);
+  let index: ProjectIndex;
+  try {
+    index = schema.assert(built);
+  } catch (error) {
+    throw new Error(`project-index: generated index for ${repo.mainRoot} violates the contract: ${error instanceof Error ? error.message : String(error)}`);
   }
-  return match;
+  const gitignoreUpdated = await ensureGitignored(exec, repo);
+  return { index, gitignoreUpdated, write: writeIndexFile(repo.indexPath, serializeIndex(index)) };
 }

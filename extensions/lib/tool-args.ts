@@ -1,5 +1,6 @@
 export type Target = { path: string; content: string };
 
+export const JIRA_COMMENT_TOOL = "mcp__atlassian_addoreditjiraissuecomment";
 const HASHLINE_HEADER = /^\[(.+?)#[0-9A-Fa-f]{4}\]\s*$/gm;
 const MOVE_LINE = /^MV\s+"?(.+?)"?\s*$/gm;
 const INTERNAL_URL = /^[a-z][a-z0-9+.-]*:\/\//i;
